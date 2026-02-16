@@ -150,11 +150,14 @@
                 </div>
                 <div>
                     <h2 class="text-2xl font-bold text-gray-900 mb-2">Connection Error</h2>
-                    <p id="errorMessage" class="text-gray-700 text-base max-w-md">Unable to connect to pairing server at
-                        <span class="font-mono text-sm bg-gray-100 px-2 py-1 rounded">209.38.118.127:3001</span>
+                    <p id="errorMessage" class="text-gray-700 max-w-md"
+                        style="font-size: clamp(0.75rem, 2.5vw, 1rem); line-height: 1.4;">Unable to connect to pairing
+                        server at
+                        <span class="font-mono bg-gray-100 px-2 py-1 rounded"
+                            style="font-size: clamp(0.7rem, 2.2vw, 0.875rem);">209.38.118.127:3001</span>
                     </p>
-                    <p class="text-gray-600 text-sm mt-2">Please check your network connection and ensure the server is
-                        reachable.</p>
+                    <p class="text-gray-600 mt-2" style="font-size: clamp(0.7rem, 2.2vw, 0.875rem); line-height: 1.4;">
+                        Please check your network connection and ensure the server is reachable.</p>
                 </div>
                 <!-- Retry Button -->
                 <button onclick="retryConnection()"
@@ -171,7 +174,8 @@
 
     <!-- Status Message - Positioned between main content and footer -->
     <div class="w-full flex justify-center pb-6 z-10">
-        <p class="text-white tracking-wide" style="font-size: 1.65rem;">ODS Player - Pairing in progress...</p>
+        <p class="text-white tracking-wide" style="font-size: clamp(1rem, 3vw, 1.65rem);">ODS Player - Pairing in
+            progress...</p>
     </div>
 
 
@@ -243,8 +247,8 @@
         // ========================================
         // DEVICE PAIRING LOGIC
         // ========================================
-        const API_URL = 'http://209.38.118.127:3001';
-        const WS_URL = 'http://209.38.118.127:3001';
+        const API_URL = 'https://api.ods-cloud.com';
+        const WS_URL = 'https://api.ods-cloud.com';
 
         let deviceUuid = null;
         let pairingCode = null;
