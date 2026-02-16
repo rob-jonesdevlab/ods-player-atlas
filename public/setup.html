@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>WiFi Configuration</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body {
+            background: url('../../../resources/brand/ods-wallpaper.png') center/cover no-repeat fixed;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            padding: 20px;
+            margin: 0;
+        }
+
+        .container {
+            max-width: 500px;
+            margin: 50px auto;
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+        }
+
+        h1 {
+            color: #667eea;
+            margin-bottom: 30px;
+            font-size: 32px;
+        }
+
+        label {
+            display: block;
+            margin-top: 20px;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 500;
+        }
+
+        input {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 16px;
+            box-sizing: border-box;
+            transition: border-color 0.3s;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        button {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 30px;
+            transition: opacity 0.3s;
+        }
+
+        button:hover {
+            opacity: 0.9;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        #message {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 10px;
+            display: none;
+        }
+
+        #message.success {
+            background: #d4edda;
+            color: #155724;
+            display: block;
+        }
+
+        #message.error {
+            background: #f8d7da;
+            color: #721c24;
+            display: block;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🌐 WiFi Configuration</h1>
+        <form id="wifiForm">
+            <label for="ssid">WiFi Network Name (SSID)</label>
+            <input type="text" id="ssid" placeholder="Enter network name" required>
+
+            <label for="password">WiFi Password</label>
+            <input type="password" id="password" placeholder="Enter password" required>
+
+            <button type="submit" id="submitBtn">Connect</button>
+        </form>
+        <div id="message"></div>
+    </div>
+
+    <script>
+        document.getElementById('wifiForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const ssid = document.getElementById('ssid').value;
+            const password = document.getElementById('password').value;
+            const submitBtn = document.getElementById('submitBtn');
+            const message = document.getElementById('message');
+
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Connecting...';
+
+            try {
+                const response = await fetch('/api/wifi/configure', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ssid, password })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    message.className = 'success';
+                    message.textContent = '✅ WiFi configured! Connecting...';
+                    setTimeout(() => {
+                        window.location.href = '/qr.html';
+                    }, 2000);
+                } else {
+                    throw new Error(data.error || 'Configuration failed');
+                }
+            } catch (error) {
+                message.className = 'error';
+                message.textContent = '❌ Failed to configure WiFi: ' + error.message;
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Connect';
+            }
+        });
+    </script>
+</body>
+
+</html>

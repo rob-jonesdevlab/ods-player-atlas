@@ -1,0 +1,13 @@
+{
+    "name": "ods-wifi-setup",
+    "version": "1.0.0",
+    "description": "ODS Player WiFi Setup Web App",
+    "main": "server.js",
+    "dependencies": {
+        "express": "^4.18.2",
+        "qrcode": "^1.5.3"
+    },
+    "scripts": {
+        "start": "node server.js"
+    }
+}

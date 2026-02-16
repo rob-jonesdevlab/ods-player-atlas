@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Enrolling Device</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            color: white;
+        }
+
+        .container {
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 48px;
+            margin-bottom: 20px;
+            font-weight: 700;
+        }
+
+        .spinner {
+            border: 8px solid rgba(255, 255, 255, 0.3);
+            border-top: 8px solid white;
+            border-radius: 50%;
+            width: 80px;
+            height: 80px;
+            animation: spin 1s linear infinite;
+            margin: 40px auto;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        p {
+            font-size: 20px;
+            opacity: 0.9;
+        }
+
+        #status {
+            margin-top: 20px;
+            font-size: 18px;
+            opacity: 0.8;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🚀 Enrolling Device</h1>
+        <div class="spinner"></div>
+        <p>Connecting to ODS Cloud...</p>
+        <div id="status"></div>
+    </div>
+
+    <script>
+        // Trigger enrollment
+        setTimeout(async () => {
+            try {
+                document.getElementById('status').textContent = 'Generating device UUID...';
+
+                const response = await fetch('/api/enroll', { method: 'POST' });
+                const data = await response.json();
+
+                if (data.success) {
+                    document.getElementById('status').textContent = '✅ Enrollment complete!';
+                    setTimeout(() => {
+                        document.getElementById('status').textContent = 'Restarting to player mode...';
+                        // In production, this would trigger a service restart
+                        setTimeout(() => {
+                            window.location.href = '/player.html';
+                        }, 2000);
+                    }, 2000);
+                } else {
+                    document.getElementById('status').textContent = '❌ Enrollment failed';
+                }
+            } catch (error) {
+                document.getElementById('status').textContent = '❌ Error: ' + error.message;
+            }
+        }, 1000);
+    </script>
+</body>
+
+</html>
