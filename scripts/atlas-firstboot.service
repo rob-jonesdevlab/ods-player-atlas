@@ -1,0 +1,18 @@
+[Unit]
+Description=ODS Player OS Atlas — Automated First Boot Setup
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/root/.not_logged_in_yet
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/usr/local/bin/atlas_firstboot.sh
+StandardOutput=journal
+StandardError=journal
+RemainAfterExit=yes
+Environment=HOME=/root
+
+[Install]
+WantedBy=multi-user.target

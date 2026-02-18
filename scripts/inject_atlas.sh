@@ -1,0 +1,162 @@
+#!/bin/bash
+
+# =============================================================================
+# ODS Player OS Atlas — Image Injection Script
+# =============================================================================
+# Adapted from Legacy: utils/esper/simple_inject.sh
+# Loop-mounts base Armbian image, injects firstboot script + systemd service
+# Run on jdl-mini-box (Linux build environment)
+# =============================================================================
+
+set -e
+
+# ─── Configuration ──────────────────────────────────────────────────────────
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Paths — update these for the build environment
+SOURCE_IMAGE="${1:-$HOME/atlas-build/Armbian_26.2.1_Rpi4b_trixie_current_6.18.9_minimal.img}"
+OUTPUT_IMAGE="${2:-$HOME/atlas-build/ods-atlas-rpi5-golden.img}"
+WORK_DIR="/tmp/atlas-inject"
+
+# ─── Helpers ────────────────────────────────────────────────────────────────
+
+log() {
+    echo "[$(date '+%H:%M:%S')] $1"
+}
+
+cleanup() {
+    log "🧹 Cleaning up..."
+    umount "$WORK_DIR/rootfs" 2>/dev/null || true
+    [ -n "$LOOP_DEV" ] && losetup -d "$LOOP_DEV" 2>/dev/null || true
+}
+
+trap cleanup EXIT
+
+# ─── Main ───────────────────────────────────────────────────────────────────
+
+main() {
+    log "🚀 ODS Player OS Atlas — Image Injection"
+    log "📋 Source: $SOURCE_IMAGE"
+    log "📋 Output: $OUTPUT_IMAGE"
+
+    # Verify source files
+    if [ ! -f "$SOURCE_IMAGE" ]; then
+        log "❌ ERROR: Source image not found: $SOURCE_IMAGE"
+        exit 1
+    fi
+
+    if [ ! -f "$SCRIPT_DIR/atlas_firstboot.sh" ]; then
+        log "❌ ERROR: atlas_firstboot.sh not found in $SCRIPT_DIR"
+        exit 1
+    fi
+
+    if [ ! -f "$SCRIPT_DIR/atlas-firstboot.service" ]; then
+        log "❌ ERROR: atlas-firstboot.service not found in $SCRIPT_DIR"
+        exit 1
+    fi
+
+    if [ ! -f "$SCRIPT_DIR/atlas_secrets.conf" ]; then
+        log "❌ ERROR: atlas_secrets.conf not found in $SCRIPT_DIR"
+        log "   This file contains credentials needed at first boot."
+        exit 1
+    fi
+
+    # Setup workspace
+    rm -rf "$WORK_DIR"
+    mkdir -p "$WORK_DIR"
+    mkdir -p "$(dirname "$OUTPUT_IMAGE")"
+
+    # Copy source image → output
+    log "📋 Copying base Armbian image..."
+    cp "$SOURCE_IMAGE" "$OUTPUT_IMAGE"
+
+    # Mount image
+    log "📋 Setting up loop device..."
+    LOOP_DEV=$(losetup --find --show --partscan "$OUTPUT_IMAGE")
+    log "📋 Loop device: $LOOP_DEV"
+
+    # Check filesystem (p2 = rootfs on RPi images, p1 = FAT32 boot)
+    log "📋 Checking filesystem..."
+    e2fsck -fy "${LOOP_DEV}p2" || true
+
+    # Mount rootfs (p2 for RPi, p1 for OPi)
+    log "📋 Mounting rootfs..."
+    mkdir -p "$WORK_DIR/rootfs"
+    mount "${LOOP_DEV}p2" "$WORK_DIR/rootfs"
+
+    # Verify mount
+    if [ ! -d "$WORK_DIR/rootfs/usr" ] || [ ! -d "$WORK_DIR/rootfs/etc" ]; then
+        log "❌ ERROR: Mount failed or not a valid Linux filesystem"
+        exit 1
+    fi
+    log "✅ Rootfs mounted"
+
+    # Inject firstboot script
+    log "📋 Injecting atlas_firstboot.sh → /usr/local/bin/"
+    mkdir -p "$WORK_DIR/rootfs/usr/local/bin"
+    cp "$SCRIPT_DIR/atlas_firstboot.sh" "$WORK_DIR/rootfs/usr/local/bin/"
+    chmod +x "$WORK_DIR/rootfs/usr/local/bin/atlas_firstboot.sh"
+
+    # Inject systemd service
+    log "📋 Injecting atlas-firstboot.service → /etc/systemd/system/"
+    mkdir -p "$WORK_DIR/rootfs/etc/systemd/system"
+    cp "$SCRIPT_DIR/atlas-firstboot.service" "$WORK_DIR/rootfs/etc/systemd/system/"
+
+    # Inject secrets config
+    log "📋 Injecting atlas_secrets.conf → /usr/local/etc/"
+    mkdir -p "$WORK_DIR/rootfs/usr/local/etc"
+    cp "$SCRIPT_DIR/atlas_secrets.conf" "$WORK_DIR/rootfs/usr/local/etc/"
+    chmod 600 "$WORK_DIR/rootfs/usr/local/etc/atlas_secrets.conf"
+
+    # Enable the service via symlink (can't use systemctl on a mounted image)
+    log "📋 Enabling service at multi-user.target..."
+    mkdir -p "$WORK_DIR/rootfs/etc/systemd/system/multi-user.target.wants"
+    ln -sf /etc/systemd/system/atlas-firstboot.service \
+        "$WORK_DIR/rootfs/etc/systemd/system/multi-user.target.wants/"
+
+    # Sync and unmount
+    log "📋 Syncing..."
+    sync
+
+    log "📋 Unmounting..."
+    umount "$WORK_DIR/rootfs"
+    losetup -d "$LOOP_DEV"
+    LOOP_DEV=""
+
+    # Results
+    OUTPUT_SIZE=$(ls -lh "$OUTPUT_IMAGE" | awk '{print $5}')
+    log ""
+    log "═══════════════════════════════════════════════════════"
+    log "✅ ODS Atlas Golden Image — INJECTION COMPLETE"
+    log "═══════════════════════════════════════════════════════"
+    log "📦 Output: $OUTPUT_IMAGE"
+    log "📊 Size:   $OUTPUT_SIZE"
+    log ""
+    log "🔧 INJECTED:"
+    log "   ✅ atlas_firstboot.sh → /usr/local/bin/"
+    log "   ✅ atlas-firstboot.service → /etc/systemd/system/"
+    log "   ✅ atlas_secrets.conf → /usr/local/etc/ (chmod 600)"
+    log "   ✅ Service enabled at multi-user.target"
+    log ""
+    log "📝 On first boot, atlas_firstboot.sh will:"
+    log "   → Install packages (chromium, xorg, node, etc.)"
+    log "   → Create users (signage, otter)"
+    log "   → Clone & deploy Atlas app"
+    log "   → Deploy 6 systemd services + 3 kiosk scripts"
+    log "   → Install Plymouth ODS theme"
+    log "   → Enroll Esper MDM"
+    log "   → Install RustDesk remote access"
+    log "   → Reboot to production kiosk"
+    log ""
+    log "🚀 Ready to flash!"
+}
+
+# Root check
+if [ "$EUID" -ne 0 ]; then
+    echo "❌ This script must be run as root (for losetup/mount)"
+    exit 1
+fi
+
+main "$@"

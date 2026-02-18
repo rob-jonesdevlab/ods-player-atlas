@@ -9,6 +9,9 @@ yarn-error.log*
 .env.local
 .env.*.local
 
+# Secrets (injected into image, never committed)
+scripts/atlas_secrets.conf
+
 # Logs
 logs/
 *.log

@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8" />
     <meta content="width=device-width, initial-scale=1.0" name="viewport" />
-    <title>ODS Player Pairing Screen</title>
+    <title>ODS Player Link</title>
     <!-- Fonts -->
     <link href="https://fonts.googleapis.com" rel="preconnect" />
     <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
@@ -46,32 +46,44 @@
         }
     </script>
     <style>
-        /* FOUC Prevention: opaque overlay hides everything until fully loaded */
-        #loadingOverlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: #000000;
-            z-index: 99999;
-            pointer-events: none;
+        /* Black background — prevents white flash before CSS/images load */
+        html,
+        body {
+            background-color: #000 !important;
         }
 
+        /* FOUC guard: body hidden until Tailwind + fonts load */
+        body {
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        body.ready {
+            opacity: 1;
+        }
+
+        /* Premium simulated glassmorphism — GPU-safe, no backdrop-filter */
         .glass-card {
-            background: rgba(255, 255, 255, 0.75);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            background: linear-gradient(135deg,
+                    rgba(255, 255, 255, 0.88) 0%,
+                    rgba(255, 255, 255, 0.78) 50%,
+                    rgba(255, 255, 255, 0.85) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+            box-shadow:
+                0 8px 32px rgba(0, 0, 0, 0.12),
+                0 2px 8px rgba(0, 0, 0, 0.06),
+                inset 0 1px 0 rgba(255, 255, 255, 0.8);
         }
 
         .glass-pill {
-            background: rgba(255, 255, 255, 0.6);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.25);
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+            background: linear-gradient(135deg,
+                    rgba(255, 255, 255, 0.85) 0%,
+                    rgba(255, 255, 255, 0.75) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            box-shadow:
+                0 4px 16px rgba(0, 0, 0, 0.1),
+                0 1px 4px rgba(0, 0, 0, 0.05),
+                inset 0 1px 0 rgba(255, 255, 255, 0.7);
         }
 
         .text-glow {
@@ -94,9 +106,6 @@
 <body
     class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-white font-display min-h-screen overflow-hidden flex flex-col relative"
     style="background: url('/resources/designs/ODS_Background.png') center/cover no-repeat fixed;">
-    <!-- FOUC Prevention Overlay -->
-    <div id="loadingOverlay"></div>
-
     <!-- Header Section - Removed subtitle, keeping space for logo alignment -->
     <header class="w-full pt-32 pb-6 px-10 flex flex-col items-center justify-center z-10">
     </header>
@@ -105,14 +114,14 @@
     <main id="loadingState" class="flex-1 flex flex-col items-center justify-center w-full px-4 z-10">
         <div class="flex flex-col items-center gap-4">
             <div class="animate-spin rounded-full h-16 w-16 border-4 border-primary border-t-transparent"></div>
-            <p class="text-slate-400 text-lg">Initializing device...</p>
+            <p class="text-gray-900 text-lg">Initializing device...</p>
         </div>
     </main>
 
     <!-- Pairing State -->
     <main id="pairingState" class="flex-1 flex flex-col items-center justify-center w-full px-4 z-10"
         style="display: none;">
-        <div class="bg-white rounded-2xl p-10 md:p-14 flex flex-col items-center max-w-2xl w-full shadow-2xl">
+        <div class="glass-card rounded-2xl p-10 md:p-14 flex flex-col items-center shadow-2xl">
             <!-- QR Code Section -->
             <div id="qrcodeContainer" class="bg-white p-4 rounded-xl shadow-lg mb-10">
                 <div id="qrcode"></div>
@@ -120,10 +129,10 @@
 
             <!-- Pairing Code -->
             <div class="flex flex-col items-center mb-10">
-                <span class="text-gray-500 text-sm font-medium mb-2 tracking-wide uppercase">Pairing Code</span>
+                <span class="text-gray-900 text-sm font-medium mb-2 tracking-wide uppercase">Pairing Code</span>
                 <h2 id="pairingCodeDisplay"
-                    class="font-mono text-[72px] leading-none font-bold text-primary tracking-wider">
-                    ------
+                    class="font-mono text-[72px] leading-none font-bold text-gray-900 tracking-wider">
+                    --- ---
                 </h2>
             </div>
 
@@ -134,23 +143,23 @@
                         <div
                             class="flex-shrink-0 w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-sm border border-primary/30">
                             1</div>
-                        <p class="text-gray-700 text-lg leading-snug">
+                        <p class="text-gray-900 text-lg leading-snug">
                             Scan the QR code or visit <span class="text-primary font-medium">ods-cloud.com/pair</span>
                         </p>
                     </div>
                     <div class="flex items-start gap-4 group">
                         <div
-                            class="flex-shrink-0 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 font-bold text-sm border border-gray-200 group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+                            class="flex-shrink-0 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-900 font-bold text-sm border border-gray-200 group-hover:bg-primary/10 group-hover:text-primary transition-colors">
                             2</div>
-                        <p class="text-gray-600 group-hover:text-gray-700 transition-colors text-lg leading-snug">
+                        <p class="text-gray-900 group-hover:text-gray-900 transition-colors text-lg leading-snug">
                             Log in to your account
                         </p>
                     </div>
                     <div class="flex items-start gap-4 group">
                         <div
-                            class="flex-shrink-0 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 font-bold text-sm border border-gray-200 group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+                            class="flex-shrink-0 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-900 font-bold text-sm border border-gray-200 group-hover:bg-primary/10 group-hover:text-primary transition-colors">
                             3</div>
-                        <p class="text-gray-600 group-hover:text-gray-700 transition-colors text-lg leading-snug">
+                        <p class="text-gray-900 group-hover:text-gray-900 transition-colors text-lg leading-snug">
                             Enter the code above to register this screen
                         </p>
                     </div>
@@ -162,7 +171,7 @@
     <!-- Error State -->
     <main id="errorState" class="flex-1 flex flex-col items-center justify-center w-full px-4 z-10"
         style="display: none;">
-        <div class="glass-card rounded-2xl p-10 md:p-14 flex flex-col items-center max-w-2xl w-full shadow-2xl">
+        <div class="glass-card rounded-2xl p-10 md:p-14 flex flex-col items-center shadow-2xl">
             <div class="flex flex-col items-center gap-6 text-center">
                 <div
                     class="w-20 h-20 rounded-full bg-red-500/20 flex items-center justify-center border-2 border-red-500/30">
@@ -170,13 +179,13 @@
                 </div>
                 <div>
                     <h2 class="text-2xl font-bold text-gray-900 mb-2">Connection Error</h2>
-                    <p id="errorMessage" class="text-gray-700 max-w-md"
+                    <p id="errorMessage" class="text-gray-900 max-w-md"
                         style="font-size: clamp(0.75rem, 2.5vw, 1rem); line-height: 1.4;">Unable to connect to pairing
                         server at
                         <span class="font-mono bg-gray-100 px-2 py-1 rounded"
                             style="font-size: clamp(0.7rem, 2.2vw, 0.875rem);">209.38.118.127:3001</span>
                     </p>
-                    <p class="text-gray-600 mt-2" style="font-size: clamp(0.7rem, 2.2vw, 0.875rem); line-height: 1.4;">
+                    <p class="text-gray-900 mt-2" style="font-size: clamp(0.7rem, 2.2vw, 0.875rem); line-height: 1.4;">
                         Please check your network connection and ensure the server is reachable.</p>
                 </div>
                 <!-- Retry Button -->
@@ -194,7 +203,7 @@
     <!-- Cooldown State -->
     <main id="cooldownState" class="flex-1 flex flex-col items-center justify-center w-full px-4 z-10"
         style="display: none;">
-        <div class="glass-card rounded-2xl p-10 md:p-14 flex flex-col items-center max-w-2xl w-full shadow-2xl">
+        <div class="glass-card rounded-2xl p-10 md:p-14 flex flex-col items-center shadow-2xl">
             <div class="flex flex-col items-center gap-6 text-center">
                 <div
                     class="w-20 h-20 rounded-full bg-amber-500/20 flex items-center justify-center border-2 border-amber-500/30">
@@ -202,7 +211,7 @@
                 </div>
                 <div>
                     <h2 class="text-2xl font-bold text-gray-900 mb-2">Rate Limit Reached</h2>
-                    <p class="text-gray-700 max-w-md" style="font-size: clamp(0.75rem, 2.5vw, 1rem); line-height: 1.4;">
+                    <p class="text-gray-900 max-w-md" style="font-size: clamp(0.75rem, 2.5vw, 1rem); line-height: 1.4;">
                         Too many pairing attempts. Please wait before trying again.
                     </p>
                 </div>
@@ -210,7 +219,7 @@
                 <div class="flex flex-col items-center gap-2">
                     <span class="font-mono text-[56px] leading-none font-bold text-amber-600"
                         id="cooldownTimer">10:00</span>
-                    <span class="text-gray-500 text-sm">until next pairing attempt</span>
+                    <span class="text-gray-900 text-sm">until next pairing attempt</span>
                 </div>
                 <div class="w-full max-w-xs bg-gray-200 rounded-full h-2 mt-2">
                     <div id="cooldownProgress" class="bg-amber-500 h-2 rounded-full" style="width: 100%"></div>
@@ -220,24 +229,17 @@
     </main>
 
 
-    <!-- Status Message - Positioned between main content and footer -->
-    <div class="w-full flex justify-center pb-6 z-10">
-        <p class="text-white tracking-wide" style="font-size: clamp(1rem, 3vw, 1.65rem);">ODS Player - Pairing in
-            progress...</p>
-    </div>
-
-
-    <!-- Footer / Status Pill -->
+    <!-- Footer / Status Pill (50% larger) -->
     <footer class="pb-12 pt-6 w-full flex justify-center z-10">
-        <div id="statusPill" class="glass-pill px-5 py-2.5 rounded-full inline-flex items-center gap-2.5 shadow-lg">
-            <span id="statusDot" class="relative flex h-2.5 w-2.5">
+        <div id="statusPill" class="glass-pill px-7 py-3.5 rounded-full inline-flex items-center gap-3 shadow-lg">
+            <span id="statusDot" class="relative flex h-3.5 w-3.5">
                 <span
                     class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
+                <span class="relative inline-flex rounded-full h-3.5 w-3.5 bg-amber-500"></span>
             </span>
             <div class="flex flex-col" id="statusContent">
-                <span id="statusText" class="text-gray-800 text-xs font-medium tracking-wide">Initializing...</span>
-                <span id="statusDetails" class="text-gray-600 text-[10px]"></span>
+                <span id="statusText" class="text-gray-900 text-sm font-medium tracking-wide">Initializing...</span>
+                <span id="statusDetails" class="text-gray-900 text-xs"></span>
             </div>
         </div>
     </footer>
@@ -252,13 +254,14 @@
         // ========================================
         // ENTERPRISE SECURITY: COMPLETE KEYBOARD LOCKDOWN
         // ========================================
-        // Block ALL keyboard shortcuts except Ctrl+Alt+Shift+T for admin terminal
+        // Block ALL keyboard shortcuts except Ctrl+Alt+Shift+Esc for system config
 
         document.addEventListener('keydown', function (e) {
-            // Allow only Ctrl+Alt+Shift+T for admin terminal (future feature)
-            if (e.ctrlKey && e.altKey && e.shiftKey && e.key === 'T') {
-                console.log('[SECURITY] Admin terminal shortcut detected (not yet implemented)');
-                return; // Allow this combination
+            // Ctrl+Alt+Shift+Esc → System Configuration
+            if (e.ctrlKey && e.altKey && e.shiftKey && e.key === 'Escape') {
+                e.preventDefault();
+                window.location.href = '/system_config.html';
+                return;
             }
 
             // Block ALL other keyboard shortcuts
@@ -293,16 +296,14 @@
         }, true);
 
         // ========================================
-        // FOUC PREVENTION: Reveal page after ALL resources loaded
+        // FOUC GUARD
         // ========================================
         function revealPage() {
-            const overlay = document.getElementById('loadingOverlay');
-            if (overlay) { overlay.remove(); }
+            document.body.classList.add('ready');
         }
-        // window.onload fires AFTER all images, scripts, stylesheets are loaded
         window.addEventListener('load', revealPage);
-        // Safety net: reveal after 4s max if CDN is slow
-        setTimeout(revealPage, 4000);
+        // Safety: reveal after 6s even if resources stall
+        setTimeout(revealPage, 6000);
 
         // ========================================
         // DEVICE PAIRING LOGIC
@@ -420,15 +421,15 @@
             if (state === 'waiting') {
                 statusDot.innerHTML = `
                     <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                    <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
+                    <span class="relative inline-flex rounded-full h-3.5 w-3.5 bg-amber-500"></span>
                 `;
             } else if (state === 'success') {
                 statusDot.innerHTML = `
-                    <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                    <span class="relative inline-flex rounded-full h-3.5 w-3.5 bg-emerald-500"></span>
                 `;
             } else if (state === 'error') {
                 statusDot.innerHTML = `
-                    <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
+                    <span class="relative inline-flex rounded-full h-3.5 w-3.5 bg-red-500"></span>
                 `;
             }
         }
@@ -563,7 +564,8 @@
                 // Show pairing state
                 document.getElementById('loadingState').style.display = 'none';
                 document.getElementById('pairingState').style.display = 'flex';
-                document.getElementById('pairingCodeDisplay').textContent = pairingCode;
+                document.getElementById('pairingCodeDisplay').textContent =
+                    pairingCode.slice(0, 3) + '-' + pairingCode.slice(3);
 
                 generateQR(data.qr_data);
                 updateStatus('waiting', 'Waiting for pairing...',

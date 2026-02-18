@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>ODS Player OS — Loader</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+            background: #000000;
+            overflow: hidden;
+        }
+
+        iframe {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border: none;
+            visibility: hidden;
+        }
+
+        iframe.active {
+            visibility: visible;
+            z-index: 1;
+        }
+    </style>
+</head>
+
+<body>
+    <iframe id="frame-network_setup" src="/network_setup.html"></iframe>
+    <iframe id="frame-player_link" src="/player_link.html"></iframe>
+    <iframe id="frame-system_config" src="/system_config.html"></iframe>
+
+    <script>
+        // ========================================
+        // ODS PLAYER OS — LOADER
+        // ========================================
+        // Zero external dependencies. Solid black.
+        // Pre-renders all pages in hidden iframes.
+        // Signals readiness to wrapper for Plymouth handoff.
+
+        const frames = {
+            network_setup: document.getElementById('frame-network_setup'),
+            player_link: document.getElementById('frame-player_link'),
+            system_config: document.getElementById('frame-system_config')
+        };
+
+        const readyState = {
+            network_setup: false,
+            player_link: false,
+            system_config: false
+        };
+
+        let currentPage = null;
+        let allReady = false;
+        let signaled = false;
+
+        // Listen for page-ready messages from iframes
+        window.addEventListener('message', function (event) {
+            if (event.data === 'page-ready') {
+                // Identify which iframe sent the message
+                for (const [name, frame] of Object.entries(frames)) {
+                    if (event.source === frame.contentWindow) {
+                        readyState[name] = true;
+                        console.log(`[LOADER] ${name} ready`);
+                        break;
+                    }
+                }
+                checkAllReady();
+            }
+
+            // Handle navigation requests from iframes
+            if (typeof event.data === 'string' && event.data.startsWith('navigate:')) {
+                const target = event.data.replace('navigate:', '');
+                showPage(target);
+            }
+        });
+
+        function checkAllReady() {
+            // We need at least network_setup and player_link ready
+            // system_config can load lazily
+            if (readyState.network_setup && readyState.player_link && !allReady) {
+                allReady = true;
+                console.log('[LOADER] All critical pages ready');
+
+                // Show the first page IMMEDIATELY
+                showPage('network_setup');
+
+                // Delay Plymouth quit by 2s so Chromium has time to paint
+                setTimeout(function () {
+                    signalReady();
+                }, 2000);
+            }
+        }
+
+        function showPage(name) {
+            if (!frames[name]) return;
+
+            // Hide all frames
+            for (const frame of Object.values(frames)) {
+                frame.classList.remove('active');
+            }
+
+            // Show target frame
+            frames[name].classList.add('active');
+            currentPage = name;
+            console.log(`[LOADER] Showing: ${name}`);
+
+            // Focus the iframe so keyboard events work
+            frames[name].focus();
+        }
+
+        function signalReady() {
+            if (signaled) return;
+            signaled = true;
+
+            // Signal the wrapper via API
+            fetch('/api/loader-ready').catch(function () {
+                // Also try touching a file directly (fallback)
+                console.log('[LOADER] Signal sent (or attempted)');
+            });
+        }
+
+        // Safety net: if pages take too long, show what we have after 10s
+        setTimeout(function () {
+            if (!allReady) {
+                console.log('[LOADER] Timeout — showing best available page');
+                if (readyState.network_setup) {
+                    showPage('network_setup');
+                } else if (readyState.player_link) {
+                    showPage('player_link');
+                } else {
+                    showPage('network_setup');
+                }
+                // Delay Plymouth quit by 2s after showing page
+                setTimeout(signalReady, 2000);
+            }
+        }, 10000);
+
+        // ========================================
+        // KEYBOARD HANDLER (loader level)
+        // ========================================
+        document.addEventListener('keydown', function (e) {
+            // Ctrl+Alt+Shift+Esc → toggle system config
+            if (e.ctrlKey && e.altKey && e.shiftKey && e.key === 'Escape') {
+                e.preventDefault();
+                if (currentPage === 'system_config') {
+                    // Return to previous page (default: network_setup)
+                    showPage('network_setup');
+                } else {
+                    showPage('system_config');
+                }
+                return;
+            }
+
+            // Block everything else at loader level
+            if (e.ctrlKey || e.altKey || e.metaKey) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+        }, true);
+
+        // Block right-click
+        document.addEventListener('contextmenu', function (e) {
+            e.preventDefault();
+            return false;
+        }, true);
+    </script>
+</body>
+
+</html>
