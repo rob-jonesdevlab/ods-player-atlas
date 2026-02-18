@@ -39,15 +39,11 @@ setup_console() {
 }
 
 log() {
-    echo "[$(date '+%H:%M:%S')] $1" | tee -a "$LOG_FILE"
-    echo "[$(date '+%H:%M:%S')] $1" > /dev/tty1 2>/dev/null || true
-    echo "[$(date '+%H:%M:%S')] $1" > /dev/console 2>/dev/null || true
+    echo "[$(date '+%H:%M:%S')] $1"
 }
 
 error() {
-    echo "[$(date '+%H:%M:%S')] ❌ ERROR: $1" | tee -a "$LOG_FILE"
-    echo "[$(date '+%H:%M:%S')] ❌ ERROR: $1" > /dev/tty1 2>/dev/null || true
-    echo "[$(date '+%H:%M:%S')] ❌ ERROR: $1" > /dev/console 2>/dev/null || true
+    echo "[$(date '+%H:%M:%S')] ❌ ERROR: $1"
 }
 
 # ─── Step 1: Armbian First-Login Bypass ─────────────────────────────────────
@@ -566,19 +562,53 @@ EOF
 configure_boot() {
     log "🔧 Step 8: Configuring boot parameters & sleep prevention..."
 
-    # Set quiet boot with splash + consoleblank=0 + vt.global_cursor_default=0
+    # RPi5 uses /boot/firmware/cmdline.txt (not armbianEnv.txt) for kernel params
+    # This is the REAL boot config — armbianEnv.txt extraargs are NOT applied on RPi
+    if [ -f /boot/firmware/cmdline.txt ]; then
+        log "  → Patching /boot/firmware/cmdline.txt (RPi boot config)..."
+        local cmdline
+        cmdline=$(cat /boot/firmware/cmdline.txt)
+
+        # Add splash quiet if not present
+        if ! echo "$cmdline" | grep -q "splash"; then
+            cmdline="$cmdline splash quiet"
+        fi
+        # Add plymouth.ignore-serial-consoles
+        if ! echo "$cmdline" | grep -q "plymouth.ignore-serial-consoles"; then
+            cmdline="$cmdline plymouth.ignore-serial-consoles"
+        fi
+        # Add consoleblank=0
+        if ! echo "$cmdline" | grep -q "consoleblank=0"; then
+            cmdline="$cmdline consoleblank=0"
+        fi
+        # Add vt.global_cursor_default=0
+        if ! echo "$cmdline" | grep -q "vt.global_cursor_default=0"; then
+            cmdline="$cmdline vt.global_cursor_default=0"
+        fi
+        # Upgrade loglevel to 3 (suppress verbose kernel output)
+        cmdline=$(echo "$cmdline" | sed 's/loglevel=[0-9]*/loglevel=3/')
+
+        echo "$cmdline" > /boot/firmware/cmdline.txt
+        log "  ✅ /boot/firmware/cmdline.txt updated"
+    fi
+
+    # Also update armbianEnv.txt if it exists (belt-and-suspenders)
     if [ -f /boot/armbianEnv.txt ]; then
         if grep -q "^extraargs=" /boot/armbianEnv.txt; then
             sed -i 's/^extraargs=.*/extraargs=cma=256M splash quiet loglevel=3 plymouth.ignore-serial-consoles consoleblank=0 vt.global_cursor_default=0/' /boot/armbianEnv.txt
         else
             echo "extraargs=cma=256M splash quiet loglevel=3 plymouth.ignore-serial-consoles consoleblank=0 vt.global_cursor_default=0" >> /boot/armbianEnv.txt
         fi
-        log "  ✅ Boot parameters configured (consoleblank=0, vt.global_cursor_default=0)"
-    else
-        log "  ⚠️  /boot/armbianEnv.txt not found — skipping boot config"
+        log "  ✅ armbianEnv.txt updated (fallback)"
     fi
 
-    # ISSUE 3 FIX: Disable ALL sleep/suspend/hibernate
+    # Mask getty@tty1 — prevents login prompt from appearing over splash/kiosk
+    log "  → Masking getty@tty1 (no login prompt on screen)..."
+    systemctl disable getty@tty1.service 2>/dev/null || true
+    systemctl mask getty@tty1.service 2>/dev/null || true
+    log "  ✅ getty@tty1 masked"
+
+    # Disable ALL sleep/suspend/hibernate
     log "  → Disabling sleep/suspend/hibernate..."
     systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target 2>/dev/null || true
 
