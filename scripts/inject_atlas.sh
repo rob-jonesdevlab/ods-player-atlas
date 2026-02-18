@@ -116,6 +116,55 @@ main() {
     ln -sf /etc/systemd/system/atlas-firstboot.service \
         "$WORK_DIR/rootfs/etc/systemd/system/multi-user.target.wants/"
 
+    # Patch boot partition cmdline.txt (prevents screen sleep during firstboot)
+    log "📋 Patching boot partition cmdline.txt..."
+    mkdir -p "$WORK_DIR/boot"
+    if mount "${LOOP_DEV}p1" "$WORK_DIR/boot" 2>/dev/null; then
+        if [ -f "$WORK_DIR/boot/cmdline.txt" ]; then
+            local cmdline
+            cmdline=$(cat "$WORK_DIR/boot/cmdline.txt")
+            local patched=false
+
+            # Add consoleblank=0 (prevent screen blank during firstboot)
+            if ! echo "$cmdline" | grep -q "consoleblank=0"; then
+                cmdline="$cmdline consoleblank=0"
+                patched=true
+            fi
+            # Add splash quiet (Plymouth boot splash)
+            if ! echo "$cmdline" | grep -q "splash"; then
+                cmdline="$cmdline splash quiet"
+                patched=true
+            fi
+            # Add plymouth.ignore-serial-consoles
+            if ! echo "$cmdline" | grep -q "plymouth.ignore-serial-consoles"; then
+                cmdline="$cmdline plymouth.ignore-serial-consoles"
+                patched=true
+            fi
+            # Add vt.global_cursor_default=0 (hide cursor)
+            if ! echo "$cmdline" | grep -q "vt.global_cursor_default=0"; then
+                cmdline="$cmdline vt.global_cursor_default=0"
+                patched=true
+            fi
+            # Upgrade loglevel to 3
+            if echo "$cmdline" | grep -q "loglevel="; then
+                cmdline=$(echo "$cmdline" | sed 's/loglevel=[0-9]*/loglevel=3/')
+                patched=true
+            fi
+
+            if [ "$patched" = true ]; then
+                echo "$cmdline" > "$WORK_DIR/boot/cmdline.txt"
+                log "   ✅ cmdline.txt patched (consoleblank=0, splash quiet, etc.)"
+            else
+                log "   ℹ️  cmdline.txt already has all required params"
+            fi
+        else
+            log "   ⚠️  No cmdline.txt found in boot partition"
+        fi
+        umount "$WORK_DIR/boot"
+    else
+        log "   ⚠️  Could not mount boot partition (p1) — cmdline.txt not patched"
+    fi
+
     # Sync and unmount
     log "📋 Syncing..."
     sync
@@ -139,6 +188,7 @@ main() {
     log "   ✅ atlas-firstboot.service → /etc/systemd/system/"
     log "   ✅ atlas_secrets.conf → /usr/local/etc/ (chmod 600)"
     log "   ✅ Service enabled at multi-user.target"
+    log "   ✅ cmdline.txt patched (consoleblank=0, splash quiet)"
     log ""
     log "📝 On first boot, atlas_firstboot.sh will:"
     log "   → Install packages (chromium, xorg, node, etc.)"

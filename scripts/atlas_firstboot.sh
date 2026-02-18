@@ -34,6 +34,14 @@ setup_console() {
     # Clear tty1 and enable echo so log messages display
     stty echo -F /dev/tty1 2>/dev/null || true
     setterm --foreground white --background black --cursor on > /dev/tty1 2>/dev/null || true
+
+    # Prevent console from blanking during firstboot (screen was turning off)
+    export TERM=linux
+    setterm --blank 0 --powersave off > /dev/tty1 2>/dev/null || true
+    echo 0 > /sys/class/graphics/fb0/blank 2>/dev/null || true
+    # Also write to kernel param immediately (backup)
+    echo 0 > /proc/sys/kernel/consoleblank 2>/dev/null || true
+
     # Redirect script stdout/stderr to tty1 as well
     exec > >(tee -a "$LOG_FILE" > /dev/tty1) 2>&1
 }
@@ -363,15 +371,19 @@ while [ ! -e /dev/dri/card* ] 2>/dev/null; do
 done
 log "DRM device ready (${ELAPSED}s)"
 
+# Deactivate Plymouth (releases DRM for Xorg but keeps framebuffer splash)
+plymouth deactivate 2>/dev/null || true
+log "Plymouth deactivated (framebuffer retained)"
+
 # Start X on VT1 (same as Plymouth — avoids white flash from VT switch)
 export HOME=/home/signage
 Xorg :0 -nolisten tcp -background none vt1 &
-sleep 2
-log "X server started on VT1 (same as Plymouth)"
-
+sleep 0.5
 export DISPLAY=:0
+# Paint black IMMEDIATELY — before anything else renders (was 2s gap before)
 xsetroot -solid "#000000"
-log "Root window set to black"
+sleep 1
+log "X server started on VT1, root window black"
 
 # Disable screen blanking/DPMS immediately after X starts
 xset -dpms 2>/dev/null || true
@@ -483,7 +495,7 @@ Description=Otter Digital Signage Landscape Boot Theme
 ModuleName=two-step
 
 [two-step]
-Font=DejaVu Sans 15
+Font=DejaVu Sans Bold 15
 TitleFont=DejaVu Sans Mono Bold 30
 ImageDir=/usr/share/plymouth/themes/ods
 DialogHorizontalAlignment=.5
@@ -505,15 +517,15 @@ MessageBelowAnimation=true
 
 [boot-up]
 UseEndAnimation=false
-UseFirmwareBackground=true
+UseFirmwareBackground=false
 
 [shutdown]
 UseEndAnimation=false
-UseFirmwareBackground=true
+UseFirmwareBackground=false
 
 [reboot]
 UseEndAnimation=false
-UseFirmwareBackground=true
+UseFirmwareBackground=false
 
 [updates]
 SuppressMessages=true
@@ -607,6 +619,20 @@ configure_boot() {
     systemctl disable getty@tty1.service 2>/dev/null || true
     systemctl mask getty@tty1.service 2>/dev/null || true
     log "  ✅ getty@tty1 masked"
+
+    # Fix shutdown/reboot splash — remove getty@tty1 from After= (we masked it)
+    log "  → Fixing plymouth-poweroff/reboot service dependencies..."
+    mkdir -p /etc/systemd/system/plymouth-poweroff.service.d
+    cat > /etc/systemd/system/plymouth-poweroff.service.d/no-getty.conf << 'OVERRIDE'
+[Unit]
+After=plymouth-start.service
+OVERRIDE
+    mkdir -p /etc/systemd/system/plymouth-reboot.service.d
+    cat > /etc/systemd/system/plymouth-reboot.service.d/no-getty.conf << 'OVERRIDE'
+[Unit]
+After=plymouth-start.service
+OVERRIDE
+    log "  ✅ plymouth-poweroff/reboot dependencies fixed"
 
     # Disable ALL sleep/suspend/hibernate
     log "  → Disabling sleep/suspend/hibernate..."
