@@ -50,7 +50,7 @@ ssh jones-dev-lab@10.111.123.134
 ```bash
 cat > /tmp/askpass.sh << "EOF"
 #!/bin/bash
-echo "your-password"
+echo "mnbvcxz!!!"
 EOF
 chmod +x /tmp/askpass.sh
 export SUDO_ASKPASS=/tmp/askpass.sh
@@ -83,7 +83,7 @@ sudo -A bash ods-player-os-atlas/scripts/inject_atlas.sh \
 scp jones-dev-lab@10.111.123.134:~/atlas-build/ods-atlas-rpi5-golden-v5.img ~/Desktop/
 
 # Or with sshpass for scripted transfer:
-SSHPASS='password' sshpass -e scp -o StrictHostKeyChecking=no \
+SSHPASS='mnbvcxz!!!' sshpass -e scp -o StrictHostKeyChecking=no \
   jones-dev-lab@10.111.123.134:~/atlas-build/ods-atlas-rpi5-golden-v5.img ~/Desktop/
 ```
 

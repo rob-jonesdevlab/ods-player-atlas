@@ -74,7 +74,7 @@ Base Armbian .img
 ```bash
 cat > /tmp/askpass.sh << "EOF"
 #!/bin/bash
-echo "password"
+echo "mnbvcxz!!!"
 EOF
 chmod +x /tmp/askpass.sh
 export SUDO_ASKPASS=/tmp/askpass.sh
