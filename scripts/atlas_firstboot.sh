@@ -104,6 +104,7 @@ install_packages() {
         xdotool \
         xterm \
         jq \
+        imagemagick \
         unclutter \
         plymouth \
         plymouth-themes \
@@ -430,11 +431,9 @@ log() {
     echo "$msg"
 }
 
-log "Starting ODS kiosk wrapper v6..."
+log "Starting ODS kiosk wrapper v7..."
 
-# Signal plymouth-hold that kiosk is starting (Issue #1 fix)
-touch /tmp/ods-kiosk-starting
-log "Plymouth readiness signal sent"
+# DO NOT signal plymouth-hold here — moved to after X is ready (Issue #1 fix v2)
 
 # Wait for DRM display
 TIMEOUT=30
@@ -449,7 +448,7 @@ while [ ! -e /dev/dri/card* ] 2>/dev/null; do
 done
 log "DRM device ready (${ELAPSED}s)"
 
-# ── TTY FLASH FIX ──────────────────────────────────────────────────────
+# ── TTY FLASH FIX (v7.1 — strengthened) ──────────────────────────────
 # Paint VT1 completely black BEFORE Plymouth releases DRM.
 log "Preparing black VT1 for seamless transition..."
 
@@ -464,10 +463,15 @@ printf '\033[2J\033[H' > /dev/tty1 2>/dev/null || true
 echo 0 > /proc/sys/kernel/printk 2>/dev/null || true
 stty -echo -F /dev/tty1 2>/dev/null || true
 
-# 4) Fill framebuffer with black pixels (belt-and-suspenders)
-dd if=/dev/zero of=/dev/fb0 bs=65536 count=128 conv=notrunc 2>/dev/null || true
+# 4) Fill framebuffer with black pixels (multiple passes for reliability)
+for pass in 1 2; do
+    dd if=/dev/zero of=/dev/fb0 bs=65536 count=256 conv=notrunc 2>/dev/null || true
+done
 
-log "VT1 pre-painted black"
+# 5) Set virtual console cursor to invisible globally
+echo -e '\033[?25l' > /dev/tty1 2>/dev/null || true
+
+log "VT1 pre-painted black (strengthened)"
 
 # Deactivate Plymouth (releases DRM — VT1 is already black, no flash)
 plymouth deactivate 2>/dev/null || true
@@ -478,7 +482,7 @@ export HOME=/home/signage
 Xorg :0 -nolisten tcp -novtswitch -background none vt1 &
 
 # Wait for Xorg to be ready (tight loop instead of fixed sleep)
-for i in $(seq 1 40); do
+for i in $(seq 1 80); do
     if xdpyinfo -display :0 >/dev/null 2>&1; then
         break
     fi
@@ -490,17 +494,32 @@ export DISPLAY=:0
 xsetroot -solid "#000000"
 log "X server started on VT1, root window black"
 
+# NOW signal plymouth-hold that kiosk is starting (Issue #1 fix v2)
+# Moved here so splash stays visible until X is actually ready
+touch /tmp/ods-kiosk-starting
+log "Plymouth readiness signal sent (X is ready)"
+
 # ── SLEEP PREVENTION — Layer 3 (X11 xset) ──────────────────────────────
 xset -dpms 2>/dev/null || true
 xset s off 2>/dev/null || true
 xset s noblank 2>/dev/null || true
 log "Layer 3: Screen blanking/DPMS disabled via xset"
 
-# ── BLACK OVERLAY — Issue #2 fix ──────────────────────────────────────
+# ── BLACK OVERLAY — Issue #2 fix (v7.1 — fullscreen) ─────────────────
 # Fullscreen black window masks the gap between Plymouth and Chromium
-xterm -fullscreen -bg black -fg black -e "sleep 30" &
+xterm -fullscreen -bg black -fg black -e "sleep 60" &
 BLACK_OVERLAY_PID=$!
-log "Black overlay launched (PID: $BLACK_OVERLAY_PID)"
+sleep 0.2
+# Ensure overlay is on top
+xdotool search --name xterm windowactivate --sync windowfocus --sync windowraise 2>/dev/null || true
+log "Black overlay launched and raised (PID: $BLACK_OVERLAY_PID)"
+
+# ── QUIT PLYMOUTH NOW — while overlay covers the transition ───────────
+# Critical: Plymouth quit must happen while black overlay is visible
+# This prevents the white/grey flash (Issue #4 fix v2)
+log "TRANSITION: quitting plymouth while black overlay covers screen..."
+plymouth quit 2>/dev/null || true
+log "TRANSITION: plymouth quit complete, black overlay still active"
 
 # ── WINDOW MANAGER — Upgrade A: Openbox (multi-window support) ────────
 openbox --config-file /etc/ods/openbox-rc.xml &
@@ -555,14 +574,8 @@ fi
 kill $BLACK_OVERLAY_PID 2>/dev/null || true
 log "Black overlay dismissed"
 
-# Give Chromium extra time to finish rendering
-sleep 2
-log "Paint delay complete, starting transition"
-
-# Quit Plymouth — X is already on VT1, no chvt needed
-log "TRANSITION: quitting plymouth (X already on VT1)..."
-plymouth quit 2>/dev/null || true
-log "TRANSITION: plymouth quit. Kiosk active."
+# Note: Plymouth was already quit earlier while overlay was covering the screen
+log "TRANSITION: Kiosk active. Boot UX pipeline complete."
 
 # Clean up boot signals
 rm -f /tmp/ods-kiosk-starting /tmp/ods-loader-ready
@@ -737,6 +750,41 @@ deploy_plymouth() {
             log "  ✅ Throbber frames copied"
         fi
         log "  ✅ Plymouth landscape assets copied"
+    fi
+
+    # ── 4K SCALING (Issue #2: splash assets too small on 4K) ──────────────
+    # Scale assets for high-resolution displays using ImageMagick
+    local THEME_DIR="/usr/share/plymouth/themes/ods"
+    if command -v convert &>/dev/null; then
+        log "  → Scaling Plymouth assets for 4K/HD compatibility..."
+
+        # watermark.png → 200%
+        if [ -f "$THEME_DIR/watermark.png" ]; then
+            convert "$THEME_DIR/watermark.png" -resize 200% "$THEME_DIR/watermark.png"
+            log "    ✅ watermark.png scaled to 200%"
+        fi
+
+        # bgrt-fallback.png → 135%
+        if [ -f "$THEME_DIR/bgrt-fallback.png" ]; then
+            convert "$THEME_DIR/bgrt-fallback.png" -resize 135% "$THEME_DIR/bgrt-fallback.png"
+            log "    ✅ bgrt-fallback.png scaled to 135%"
+        fi
+
+        # throbber frames → 80%
+        local throbber_count=0
+        for frame in "$THEME_DIR"/throbber-*.png; do
+            if [ -f "$frame" ]; then
+                convert "$frame" -resize 80% "$frame"
+                throbber_count=$((throbber_count + 1))
+            fi
+        done
+        if [ $throbber_count -gt 0 ]; then
+            log "    ✅ $throbber_count throbber frames scaled to 80%"
+        fi
+
+        log "  ✅ 4K asset scaling complete"
+    else
+        log "  ⚠️  ImageMagick not found — skipping 4K scaling"
     fi
 
     # Create theme config
