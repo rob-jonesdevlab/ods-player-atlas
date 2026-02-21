@@ -108,9 +108,40 @@ sudo dd if=~/Desktop/ods-atlas-golden-v7-OPENBOX.img of=/dev/rdiskN bs=4m status
 
 ## Version Naming
 
-| Name | Meaning |
-|------|---------|
-| `ods-atlas-rpi5-golden.img` | Default output (no version suffix) |
-| `ods-atlas-golden-v7-OPENBOX.img` | Versioned output (current) |
+```
+ods-atlas-golden-vMAJOR-PATCH-TAG.img
+```
 
-Always build with an explicit version suffix to avoid overwriting the default.
+| Component | Example | Description |
+|-----------|---------|-------------|
+| `vMAJOR` | `v7` | Major version (sequential) |
+| `PATCH` | `1` | Patch within major (0 = initial release) |
+| `TAG` | `OPENBOX` | Human-readable milestone (ALLCAPS) |
+
+### Immutable Versioning Rules
+
+1. **Never overwrite** — every build gets a unique version
+2. **Desktop = staging** — delete old version before placing new build
+3. **NVME_VAULT = archive** — all builds preserved at `/Volumes/NVME_VAULT/golden-atlas-img/`
+4. **jdl-mini-box** — may retain only latest build
+
+### Build Workflow
+
+```bash
+# 1. SCP scripts from Mac (use sshpass -f for passwords with special chars)
+sshpass -f /tmp/.ods_sshpass scp -o StrictHostKeyChecking=no \
+  scripts/atlas_firstboot.sh jones-dev-lab@10.111.123.134:~/atlas-build/scripts/
+
+# 2. Build with new version name (never reuse)
+sshpass -f /tmp/.ods_sshpass ssh jones-dev-lab@10.111.123.134 \
+  '... sudo -A bash scripts/inject_atlas.sh <source> ~/atlas-build/ods-atlas-golden-vN-P-TAG.img'
+
+# 3. Delete old Desktop version, SCP new one
+rm -f ~/Desktop/ods-atlas-golden-*.img
+sshpass -f /tmp/.ods_sshpass scp jones-dev-lab@10.111.123.134:~/atlas-build/ods-atlas-golden-vN-P-TAG.img ~/Desktop/
+
+# 4. Flash + test, then archive to NVME_VAULT
+mv ~/Desktop/ods-atlas-golden-vN-P-TAG.img /Volumes/NVME_VAULT/golden-atlas-img/
+```
+
+See `ods-signage/player/versioninfo/` for detailed release notes per version.
