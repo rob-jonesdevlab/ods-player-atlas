@@ -339,6 +339,33 @@ RemainAfterExit=yes
 [Install]
 WantedBy=poweroff.target reboot.target halt.target
 EOF
+    # --- ods-enrollment-retry.service (Issue #5 fix: persistent enrollment) ---
+    # Adapted from legacy ods_esper_mgr.sh enrollment persistence pattern
+    cat > /etc/systemd/system/ods-enrollment-retry.service << 'EOF'
+[Unit]
+Description=ODS Enrollment Retry (Issue #5 - persistent cloud registration)
+After=network-online.target ods-webserver.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -c 'if [ ! -f /var/lib/ods/enrollment.flag ]; then curl -s -X POST http://localhost:8080/api/enroll | tee -a /var/log/ods-enrollment.log; fi'
+EOF
+
+    cat > /etc/systemd/system/ods-enrollment-retry.timer << 'EOF'
+[Unit]
+Description=Retry ODS Cloud enrollment every 30 minutes until registered
+
+[Timer]
+OnBootSec=120
+OnUnitActiveSec=1800
+
+[Install]
+WantedBy=timers.target
+EOF
+
+    # Create /var/lib/ods/ for enrollment state
+    mkdir -p /var/lib/ods
 
     # Enable all services
     systemctl daemon-reload
@@ -350,8 +377,9 @@ EOF
     systemctl enable ods-shutdown-splash.service
     systemctl enable ods-dpms-enforce.timer
     systemctl enable ods-display-config.service
+    systemctl enable ods-enrollment-retry.timer
 
-    log "  ✅ All 8 services deployed and enabled"
+    log "  ✅ All 9 services deployed and enabled"
 }
 
 # ─── Step 6: Deploy Kiosk Scripts ──────────────────────────────────────────

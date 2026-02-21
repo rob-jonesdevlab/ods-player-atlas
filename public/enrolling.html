@@ -1,39 +1,68 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 
 <head>
     <title>Enrolling Device</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
         body {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #0a0a0a;
             display: flex;
             align-items: center;
             justify-content: center;
             height: 100vh;
-            margin: 0;
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
             color: white;
+            -webkit-user-select: none;
+            user-select: none;
         }
 
         .container {
             text-align: center;
+            max-width: 500px;
+            padding: 40px;
         }
 
-        h1 {
+        .logo {
+            width: 100px;
+            height: 100px;
+            margin: 0 auto 24px;
+            background: linear-gradient(135deg, #ff6b00, #ff8c33);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             font-size: 48px;
-            margin-bottom: 20px;
             font-weight: 700;
         }
 
+        h1 {
+            font-size: 28px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            font-size: 14px;
+            color: #888;
+            margin-bottom: 32px;
+        }
+
         .spinner {
-            border: 8px solid rgba(255, 255, 255, 0.3);
-            border-top: 8px solid white;
+            border: 4px solid rgba(255, 107, 0, 0.2);
+            border-top: 4px solid #ff6b00;
             border-radius: 50%;
-            width: 80px;
-            height: 80px;
+            width: 48px;
+            height: 48px;
             animation: spin 1s linear infinite;
-            margin: 40px auto;
+            margin: 24px auto;
         }
 
         @keyframes spin {
@@ -46,52 +75,149 @@
             }
         }
 
-        p {
-            font-size: 20px;
-            opacity: 0.9;
+        #status {
+            font-size: 14px;
+            color: #aaa;
+            min-height: 20px;
         }
 
-        #status {
-            margin-top: 20px;
-            font-size: 18px;
-            opacity: 0.8;
+        #retry-info {
+            font-size: 12px;
+            color: #666;
+            margin-top: 16px;
+        }
+
+        .success {
+            color: #4caf50 !important;
+        }
+
+        .error {
+            color: #f44336 !important;
+        }
+
+        .warning {
+            color: #ff9800 !important;
+        }
+
+        .pairing-code {
+            font-size: 36px;
+            font-weight: 700;
+            letter-spacing: 6px;
+            color: #ff6b00;
+            margin: 16px 0;
+            font-family: monospace;
         }
     </style>
 </head>
 
 <body>
     <div class="container">
-        <h1>🚀 Enrolling Device</h1>
-        <div class="spinner"></div>
-        <p>Connecting to ODS Cloud...</p>
-        <div id="status"></div>
+        <div class="logo">O</div>
+        <h1>Enrolling Device</h1>
+        <p class="subtitle">Connecting to ODS Cloud</p>
+        <div class="spinner" id="spinner"></div>
+        <div id="status">Initializing...</div>
+        <div id="pairing-display"></div>
+        <div id="retry-info"></div>
     </div>
 
     <script>
-        // Trigger enrollment
-        setTimeout(async () => {
-            try {
-                document.getElementById('status').textContent = 'Generating device UUID...';
+        const MAX_RETRIES = 5;
+        const RETRY_DELAYS = [3000, 5000, 10000, 20000, 30000]; // escalating delays
+        let attempt = 0;
 
+        async function enroll() {
+            attempt++;
+            const status = document.getElementById('status');
+            const retryInfo = document.getElementById('retry-info');
+
+            status.textContent = `Registering with ODS Cloud (attempt ${attempt}/${MAX_RETRIES})...`;
+            status.className = '';
+
+            try {
                 const response = await fetch('/api/enroll', { method: 'POST' });
                 const data = await response.json();
 
                 if (data.success) {
-                    document.getElementById('status').textContent = '✅ Enrollment complete!';
-                    setTimeout(() => {
-                        document.getElementById('status').textContent = 'Restarting to player mode...';
-                        // In production, this would trigger a service restart
-                        setTimeout(() => {
-                            window.location.href = '/player.html';
-                        }, 2000);
-                    }, 2000);
+                    document.getElementById('spinner').style.display = 'none';
+
+                    if (data.already_paired) {
+                        status.textContent = '✅ Device already paired!';
+                        status.className = 'success';
+                        retryInfo.textContent = 'Redirecting to player...';
+                        setTimeout(() => { window.location.href = '/player.html'; }, 2000);
+                    } else {
+                        status.textContent = '✅ Registered! Pairing code:';
+                        status.className = 'success';
+
+                        document.getElementById('pairing-display').innerHTML =
+                            `<div class="pairing-code">${data.pairing_code}</div>` +
+                            `<p style="font-size:12px;color:#888">Enter this code in the ODS Cloud dashboard to pair</p>`;
+
+                        retryInfo.textContent = 'Waiting for pairing...';
+
+                        // Poll for pairing status
+                        pollPairingStatus(data.device_uuid);
+                    }
                 } else {
-                    document.getElementById('status').textContent = '❌ Enrollment failed';
+                    throw new Error(data.error || 'Registration failed');
                 }
             } catch (error) {
-                document.getElementById('status').textContent = '❌ Error: ' + error.message;
+                if (attempt < MAX_RETRIES) {
+                    const delay = RETRY_DELAYS[attempt - 1] || 30000;
+                    status.textContent = `⚠️ ${error.message}`;
+                    status.className = 'warning';
+                    retryInfo.textContent = `Retrying in ${delay / 1000}s (${attempt}/${MAX_RETRIES})...`;
+                    setTimeout(enroll, delay);
+                } else {
+                    status.textContent = `❌ Registration failed after ${MAX_RETRIES} attempts`;
+                    status.className = 'error';
+                    retryInfo.innerHTML =
+                        'Check network connection. ' +
+                        '<span style="text-decoration:underline;cursor:pointer" onclick="attempt=0;enroll()">Retry</span>';
+                    document.getElementById('spinner').style.display = 'none';
+                }
             }
-        }, 1000);
+        }
+
+        async function pollPairingStatus(deviceUuid) {
+            try {
+                const ODS_CLOUD = 'http://209.38.118.127:3001';
+                const res = await fetch(`${ODS_CLOUD}/api/pairing/status/${deviceUuid}`);
+                const data = await res.json();
+
+                if (data.paired) {
+                    document.getElementById('status').textContent = '✅ Paired successfully!';
+                    document.getElementById('pairing-display').innerHTML = '';
+                    document.getElementById('retry-info').textContent = 'Redirecting to player...';
+                    setTimeout(() => { window.location.href = '/player.html'; }, 2000);
+                } else {
+                    // Keep polling every 5 seconds
+                    setTimeout(() => pollPairingStatus(deviceUuid), 5000);
+                }
+            } catch {
+                // Retry poll on error
+                setTimeout(() => pollPairingStatus(deviceUuid), 10000);
+            }
+        }
+
+        // Block keyboard shortcuts
+        document.addEventListener('keydown', function (e) {
+            if (e.ctrlKey && e.altKey && e.shiftKey && e.key === 'O') {
+                e.preventDefault();
+                window.location.href = '/system_config.html';
+                return;
+            }
+            if (e.ctrlKey || e.altKey || e.metaKey) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+        }, true);
+
+        document.addEventListener('contextmenu', e => e.preventDefault());
+
+        // Start enrollment after 1s
+        setTimeout(enroll, 1000);
     </script>
 </body>
 

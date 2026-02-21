@@ -65,14 +65,66 @@ app.get('/api/qr', async (req, res) => {
     res.json({ qrCode });
 });
 
-// Trigger enrollment
-app.post('/api/enroll', (req, res) => {
-    exec('python3 /usr/local/bin/device_uuid_generator.py 209.38.118.127 9999', (error, stdout) => {
-        if (error) {
-            return res.status(500).json({ error: 'Enrollment failed' });
+// Trigger enrollment — register device with ODS Cloud
+app.post('/api/enroll', async (req, res) => {
+    try {
+        // Get CPU serial from /proc/cpuinfo
+        const { promisify } = require('util');
+        const execAsync = promisify(exec);
+
+        const { stdout: cpuInfo } = await execAsync("cat /proc/cpuinfo | grep Serial | awk '{print $3}'");
+        const cpuSerial = cpuInfo.trim() || 'UNKNOWN';
+
+        // Generate or retrieve device UUID
+        const uuidFile = '/home/signage/ODS/config/device_uuid';
+        let deviceUuid;
+        try {
+            deviceUuid = fs.readFileSync(uuidFile, 'utf8').trim();
+        } catch {
+            const crypto = require('crypto');
+            deviceUuid = crypto.randomUUID();
+            const dir = require('path').dirname(uuidFile);
+            if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+            fs.writeFileSync(uuidFile, deviceUuid);
         }
-        res.json({ success: true, output: stdout });
-    });
+
+        // Call ODS Cloud pairing API
+        const ODS_CLOUD_URL = process.env.ODS_CLOUD_URL || 'http://209.38.118.127:3001';
+        const pairingRes = await fetch(`${ODS_CLOUD_URL}/api/pairing/generate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cpu_serial: cpuSerial, device_uuid: deviceUuid })
+        });
+
+        const pairingData = await pairingRes.json();
+
+        if (pairingRes.ok) {
+            // Write enrollment flag for retry script
+            fs.writeFileSync('/var/lib/ods/enrollment.flag', JSON.stringify({
+                enrolled: true,
+                timestamp: new Date().toISOString(),
+                device_uuid: deviceUuid,
+                pairing_code: pairingData.pairing_code
+            }));
+
+            res.json({
+                success: true,
+                device_uuid: deviceUuid,
+                pairing_code: pairingData.pairing_code,
+                expires_at: pairingData.expires_at,
+                qr_data: pairingData.qr_data
+            });
+        } else if (pairingRes.status === 409) {
+            // Already paired — not an error
+            res.json({ success: true, already_paired: true, account_id: pairingData.account_id });
+        } else {
+            console.error('[ENROLL] Cloud API error:', pairingData);
+            res.status(500).json({ error: pairingData.error || 'Cloud registration failed' });
+        }
+    } catch (error) {
+        console.error('[ENROLL] Error:', error.message);
+        res.status(500).json({ error: 'Enrollment failed: ' + error.message });
+    }
 });
 
 // ========================================
