@@ -103,6 +103,7 @@ install_packages() {
         openbox \
         xdotool \
         xterm \
+        fbi \
         jq \
         imagemagick \
         unclutter \
@@ -439,8 +440,9 @@ SCRIPT
     # --- ods-kiosk-wrapper.sh ---
     cat > /usr/local/bin/ods-kiosk-wrapper.sh << 'SCRIPT'
 #!/bin/bash
-# ODS Kiosk Wrapper v6 — Openbox + multi-window + 4-layer sleep prevention
-# Handles: DRM wait → Plymouth deactivate → X start → Openbox → Chromium → Plymouth quit
+# ODS Kiosk Wrapper v8 — Framebuffer Bridge (seamless boot)
+# Pipeline: DRM → fbi splash on /dev/fb0 → Plymouth quit → Xorg → Chromium → kill fbi
+# Zero gaps. Zero flashes. Splash visible from Plymouth through Chromium render.
 LOG_DIR="/home/signage/ODS/logs/boot"
 mkdir -p "$LOG_DIR"
 BOOT_LOG="$LOG_DIR/boot_$(date +%Y%m%d_%H%M%S).log"
@@ -452,9 +454,7 @@ log() {
     echo "$msg"
 }
 
-log "Starting ODS kiosk wrapper v7..."
-
-# DO NOT signal plymouth-hold here — moved to after X is ready (Issue #1 fix v2)
+log "Starting ODS kiosk wrapper v8 (framebuffer bridge)..."
 
 # Wait for DRM display
 TIMEOUT=30
@@ -469,40 +469,51 @@ while [ ! -e /dev/dri/card* ] 2>/dev/null; do
 done
 log "DRM device ready (${ELAPSED}s)"
 
-# ── TTY FLASH FIX (v7.1 — strengthened) ──────────────────────────────
-# Paint VT1 completely black BEFORE Plymouth releases DRM.
-log "Preparing black VT1 for seamless transition..."
-
-# 1) Set VT1 text colors to black-on-black and hide cursor
+# ── STAGE 1: TTY BLACKOUT ─────────────────────────────────────────────
+# Paint VT1 completely black BEFORE anything else
+log "Painting VT1 black..."
 export TERM=linux
 setterm --foreground black --background black --cursor off > /dev/tty1 2>/dev/null || true
-
-# 2) Clear the screen to the new background color (black)
 printf '\033[2J\033[H' > /dev/tty1 2>/dev/null || true
-
-# 3) Suppress all console output to VT1
 echo 0 > /proc/sys/kernel/printk 2>/dev/null || true
 stty -echo -F /dev/tty1 2>/dev/null || true
-
-# 4) Fill framebuffer with black pixels (multiple passes for reliability)
-for pass in 1 2; do
-    dd if=/dev/zero of=/dev/fb0 bs=65536 count=256 conv=notrunc 2>/dev/null || true
-done
-
-# 5) Set virtual console cursor to invisible globally
 echo -e '\033[?25l' > /dev/tty1 2>/dev/null || true
+log "VT1 painted black"
 
-log "VT1 pre-painted black (strengthened)"
+# ── STAGE 2: FRAMEBUFFER SPLASH BRIDGE ────────────────────────────────
+# Display ODS splash PNG directly on /dev/fb0 via fbi.
+# This image persists underneath X11 and stays visible until we kill fbi.
+# It bridges the gap between Plymouth and Chromium rendering.
+SPLASH_IMG="/usr/share/plymouth/themes/ods/watermark.png"
+FBI_PID=""
 
-# Deactivate Plymouth (releases DRM — VT1 is already black, no flash)
+if [ -f "$SPLASH_IMG" ] && [ -c /dev/fb0 ]; then
+    # Fill framebuffer black first (clean slate)
+    dd if=/dev/zero of=/dev/fb0 bs=65536 count=512 conv=notrunc 2>/dev/null || true
+
+    # Launch fbi on VT1 to display splash image
+    fbi -T 1 -a --noverbose --nocomments "$SPLASH_IMG" 2>/dev/null &
+    FBI_PID=$!
+    sleep 0.3
+    log "fbi splash bridge active (PID: $FBI_PID)"
+else
+    log "WARN: Splash image or /dev/fb0 not available; using black framebuffer"
+    dd if=/dev/zero of=/dev/fb0 bs=65536 count=512 conv=notrunc 2>/dev/null || true
+fi
+
+# ── STAGE 3: PLYMOUTH QUIT ────────────────────────────────────────────
+# Safe to quit Plymouth now — fbi splash is holding the display
+touch /tmp/ods-kiosk-starting
 plymouth deactivate 2>/dev/null || true
-log "Plymouth deactivated (VT1 is black)"
+plymouth quit 2>/dev/null || true
+log "Plymouth released (fbi splash still visible)"
 
-# Start X on VT1 (same VT — no VT switch needed)
+# ── STAGE 4: X SERVER ─────────────────────────────────────────────────
+# Xorg starts on VT1 — fbi splash remains visible on the framebuffer underneath
 export HOME=/home/signage
 Xorg :0 -nolisten tcp -novtswitch -background none vt1 &
 
-# Wait for Xorg to be ready (tight loop instead of fixed sleep)
+# Wait for Xorg to be ready
 for i in $(seq 1 80); do
     if xdpyinfo -display :0 >/dev/null 2>&1; then
         break
@@ -511,43 +522,22 @@ for i in $(seq 1 80); do
 done
 export DISPLAY=:0
 
-# Paint X root window black immediately
+# Paint X root window black (safety layer under Chromium)
 xsetroot -solid "#000000"
-log "X server started on VT1, root window black"
-
-# NOW signal plymouth-hold that kiosk is starting (Issue #1 fix v2)
-# Moved here so splash stays visible until X is actually ready
-touch /tmp/ods-kiosk-starting
-log "Plymouth readiness signal sent (X is ready)"
+log "X server started on VT1"
 
 # ── SLEEP PREVENTION — Layer 3 (X11 xset) ──────────────────────────────
 xset -dpms 2>/dev/null || true
 xset s off 2>/dev/null || true
 xset s noblank 2>/dev/null || true
-log "Layer 3: Screen blanking/DPMS disabled via xset"
+log "Screen blanking/DPMS disabled"
 
-# ── BLACK OVERLAY — Issue #2 fix (v7.1 — fullscreen) ─────────────────
-# Fullscreen black window masks the gap between Plymouth and Chromium
-xterm -fullscreen -bg black -fg black -e "sleep 60" &
-BLACK_OVERLAY_PID=$!
-sleep 0.2
-# Ensure overlay is on top
-xdotool search --name xterm windowactivate --sync windowfocus --sync windowraise 2>/dev/null || true
-log "Black overlay launched and raised (PID: $BLACK_OVERLAY_PID)"
-
-# ── QUIT PLYMOUTH NOW — while overlay covers the transition ───────────
-# Critical: Plymouth quit must happen while black overlay is visible
-# This prevents the white/grey flash (Issue #4 fix v2)
-log "TRANSITION: quitting plymouth while black overlay covers screen..."
-plymouth quit 2>/dev/null || true
-log "TRANSITION: plymouth quit complete, black overlay still active"
-
-# ── WINDOW MANAGER — Upgrade A: Openbox (multi-window support) ────────
+# ── STAGE 5: WINDOW MANAGER + CHROMIUM ────────────────────────────────
 openbox --config-file /etc/ods/openbox-rc.xml &
 unclutter -idle 0.01 -root &
 log "Openbox window manager started"
 
-# ── DISPLAY CONFIG — Upgrade B: orientation + dual-monitor ────────────
+# Display configuration
 /usr/local/bin/ods-display-config.sh 2>/dev/null || true
 log "Display configuration applied"
 
@@ -566,37 +556,42 @@ else
 fi
 log "Screen width: ${SCREEN_W}, Scale factor: ${ODS_SCALE}"
 
-# Start the kiosk (primary screen)
+# Launch Chromium
 /usr/local/bin/start-kiosk.sh &
 KIOSK_PID=$!
 log "Chromium launched (PID: $KIOSK_PID)"
 
-# Wait for page ready signal
+# ── STAGE 6: WAIT FOR PAGE READY → KILL SPLASH ───────────────────────
+# Chromium page calls /api/signal-ready which touches this file.
+# Only then do we kill the fbi splash, revealing the rendered page.
 SIGNAL_FILE="/tmp/ods-loader-ready"
 rm -f "$SIGNAL_FILE"
-TIMEOUT=20
+TIMEOUT=30
 ELAPSED=0
-log "Waiting for page ready signal..."
+log "Waiting for Chromium page ready signal..."
 
 while [ ! -f "$SIGNAL_FILE" ]; do
     sleep 0.5
     ELAPSED=$((ELAPSED + 1))
     if [ $ELAPSED -ge $((TIMEOUT * 2)) ]; then
-        log "WARN: Page ready signal not received after ${TIMEOUT}s — forcing transition"
+        log "WARN: Page ready not received after ${TIMEOUT}s — forcing reveal"
         break
     fi
 done
 
 if [ -f "$SIGNAL_FILE" ]; then
-    log "Page ready signal received"
+    log "Page ready signal received — revealing Chromium"
 fi
 
-# Kill black overlay now that Chromium is visible (Issue #2 fix)
-kill $BLACK_OVERLAY_PID 2>/dev/null || true
-log "Black overlay dismissed"
+# Kill fbi splash bridge — Chromium is now rendered
+if [ -n "$FBI_PID" ]; then
+    kill "$FBI_PID" 2>/dev/null || true
+    # Also kill any lingering fbi processes
+    killall fbi 2>/dev/null || true
+    log "fbi splash bridge dismissed"
+fi
 
-# Note: Plymouth was already quit earlier while overlay was covering the screen
-log "TRANSITION: Kiosk active. Boot UX pipeline complete."
+log "TRANSITION COMPLETE: Kiosk active. Zero-gap boot pipeline done."
 
 # Clean up boot signals
 rm -f /tmp/ods-kiosk-starting /tmp/ods-loader-ready
@@ -857,6 +852,15 @@ deploy_plymouth() {
             log "  ✅ Throbber frames copied"
         fi
         log "  ✅ Plymouth landscape assets copied"
+
+        # Create full-res splash.png for fbi bridge (watermark composited on black canvas)
+        if command -v convert &>/dev/null && [ -f "/usr/share/plymouth/themes/ods/watermark.png" ]; then
+            convert -size 1920x1080 xc:black \
+                /usr/share/plymouth/themes/ods/watermark.png \
+                -gravity center -composite \
+                /usr/share/plymouth/themes/ods/splash.png
+            log "  ✅ splash.png created for fbi bridge (1920x1080)"
+        fi
     fi
 
     # ── 4K SCALING (Issue #2: splash assets too small on 4K) ──────────────
