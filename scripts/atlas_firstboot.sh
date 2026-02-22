@@ -523,6 +523,18 @@ touch /tmp/ods-kiosk-starting
 plymouth deactivate 2>/dev/null || true
 log "Plymouth deactivated (DRM released for Xorg, console output suppressed)"
 
+# ── STAGE 2b: POST-DEACTIVATE BLACKOUT ────────────────────────────────
+# CRITICAL: Plymouth was COVERING tty1's text buffer. When Plymouth
+# deactivates, the kernel restores tty1's buffer to the framebuffer —
+# exposing all the [OK] messages that were printed during boot.
+# We must clear tty1 AND the framebuffer AGAIN immediately.
+for tty in /dev/tty1 /dev/tty2 /dev/tty3; do
+    printf '\033[2J\033[H\033[?25l' > "$tty" 2>/dev/null || true
+    setterm --foreground black --background black --cursor off > "$tty" 2>/dev/null || true
+done
+dd if=/dev/zero of=/dev/fb0 bs=65536 count=512 conv=notrunc 2>/dev/null || true
+log "Post-deactivate blackout complete (tty1 buffer cleared)"
+
 # ── STAGE 3: X SERVER (grey flash eliminated) ────────────────────────
 # The modeset driver re-initializes kms color map 6+ times during startup.
 # A single xsetroot won't cover all resets. Solution: continuous repaint loop.
