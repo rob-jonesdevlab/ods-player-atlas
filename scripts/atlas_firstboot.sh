@@ -103,7 +103,7 @@ install_packages() {
         openbox \
         xdotool \
         xterm \
-        fbi \
+        gnome-themes-extra \
         jq \
         imagemagick \
         unclutter \
@@ -544,6 +544,18 @@ else
 fi
 log "Screen: ${SCREEN_W}px, Scale: ${ODS_SCALE}"
 
+# Force dark GTK theme — Chromium uses GTK for initial canvas color.
+# Without a dark theme, Chromium flashes white before page CSS loads.
+export GTK_THEME="Adwaita:dark"
+export GTK2_RC_FILES="/usr/share/themes/Adwaita-dark/gtk-2.0/gtkrc"
+mkdir -p /home/signage/.config/gtk-3.0
+cat > /home/signage/.config/gtk-3.0/settings.ini << 'GTK'
+[Settings]
+gtk-application-prefer-dark-theme=1
+gtk-theme-name=Adwaita-dark
+GTK
+log "Dark GTK theme set"
+
 # Launch Chromium (page has FOUC guard — starts invisible, fades in when ready)
 /usr/local/bin/start-kiosk.sh &
 KIOSK_PID=$!
@@ -593,22 +605,20 @@ printf "\033[?25l" > /dev/tty1 2>/dev/null || true
 SCRIPT
     chmod +x /usr/local/bin/hide-tty.sh
 
-    # --- ods-auth-check.sh (Admin auth via shadow + openssl — Python-free) ---
+    # --- ods-auth-check.sh (Admin auth via su/PAM — yescrypt compatible) ---
+    # Python crypt+spwd removed in 3.13. openssl doesn't support yescrypt ($y$).
+    # su uses PAM which natively handles yescrypt. Tested working on live device.
     cat > /usr/local/bin/ods-auth-check.sh << 'SCRIPT'
 #!/bin/bash
-# ODS Admin Auth — validates credentials via /etc/shadow + openssl
-# Replaces Python crypt+spwd (spwd removed from Python 3.13+)
+# ODS Admin Auth — validates credentials via su (PAM-native, yescrypt-safe)
 USER="$1"; PASS="$2"
 [ -z "$USER" ] || [ -z "$PASS" ] && { echo "FAIL"; exit 1; }
-SHADOW=$(getent shadow "$USER" 2>/dev/null) || { echo "FAIL"; exit 1; }
-HASH=$(echo "$SHADOW" | cut -d: -f2)
-# Extract algorithm and salt from stored hash ($id$salt$hash format)
-ALGO=$(echo "$HASH" | cut -d'$' -f2)
-SALT=$(echo "$HASH" | cut -d'$' -f3)
-[ -z "$ALGO" ] || [ -z "$SALT" ] && { echo "FAIL"; exit 1; }
-# Compute hash using openssl passwd
-COMPUTED=$(openssl passwd -"$ALGO" -salt "$SALT" "$PASS" 2>/dev/null)
-[ "$COMPUTED" = "$HASH" ] && echo "OK" || echo "FAIL"
+# su invokes PAM which handles any hash algorithm including yescrypt ($y$)
+if echo "$PASS" | su -c "echo OK" "$USER" 2>/dev/null | grep -q "^OK$"; then
+    echo "OK"
+else
+    echo "FAIL"
+fi
 SCRIPT
     chmod +x /usr/local/bin/ods-auth-check.sh
     # Allow signage user to run auth check as root (needed to read /etc/shadow)
