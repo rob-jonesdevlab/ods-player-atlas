@@ -513,10 +513,15 @@ dd if=/dev/zero of=/dev/fb0 bs=65536 count=512 conv=notrunc 2>/dev/null || true
 log "VT1 blackout complete"
 
 # ── STAGE 2: PLYMOUTH DEACTIVATE ─────────────────────────────────────
+# CRITICAL: Kill ALL console output BEFORE releasing DRM.
+# Without this, systemd journal messages forwarded to /dev/kmsg flash
+# on tty1 during the ~2s Plymouth→Xorg handoff window ([OK] messages).
+dmesg -D 2>/dev/null || true          # Disable kernel console printk entirely
+echo 0 > /proc/sys/kernel/printk 2>/dev/null || true  # Belt-and-suspenders
 # deactivate releases DRM for Xorg. Plymouth quit handled by Stage 6.
 touch /tmp/ods-kiosk-starting
 plymouth deactivate 2>/dev/null || true
-log "Plymouth deactivated (DRM released for Xorg)"
+log "Plymouth deactivated (DRM released for Xorg, console output suppressed)"
 
 # ── STAGE 3: X SERVER (grey flash eliminated) ────────────────────────
 # The modeset driver re-initializes kms color map 6+ times during startup.
@@ -1125,6 +1130,47 @@ enroll_esper() {
     fi
 }
 
+# ─── Step 10a: Configure RustDesk (Phase 2 — key config only) ──────────────
+
+configure_rustdesk() {
+    log "🔧 Step 10a: Configuring RustDesk relay keys..."
+
+    # Configure relay server (binary already installed in Phase 1)
+    for dir in /root/.config/rustdesk /home/otter/.config/rustdesk /home/signage/.config/rustdesk /opt/rustdesk; do
+        mkdir -p "$dir"
+        cat > "$dir/RustDesk2.toml" << EOF
+rendezvous_server = '${RUSTDESK_RELAY}:21116'
+nat_type = 1
+serial = 0
+
+[options]
+custom-rendezvous-server = '${RUSTDESK_RELAY}'
+relay-server = '${RUSTDESK_RELAY}'
+api-server = 'http://${RUSTDESK_RELAY}:21118'
+key = '${RUSTDESK_KEY}'
+EOF
+        cat > "$dir/RustDesk.toml" << EOF
+password = '${RUSTDESK_PASSWORD}'
+salt = '3phd4z'
+key_confirmed = true
+
+[keys_confirmed]
+"${RUSTDESK_RELAY}:21116" = true
+EOF
+    done
+
+    # Fix ownership
+    chown -R root:root /root/.config/rustdesk/ /opt/rustdesk/ 2>/dev/null || true
+    chown -R otter:otter /home/otter/.config/rustdesk/ 2>/dev/null || true
+    chown -R signage:signage /home/signage/.config/rustdesk/ 2>/dev/null || true
+
+    # Restart RustDesk service to pick up new config
+    systemctl restart rustdesk 2>/dev/null || true
+    systemctl restart ods-rustdesk-enterprise 2>/dev/null || true
+
+    log "  ✅ RustDesk relay keys configured"
+}
+
 # ─── Step 10: Install RustDesk ─────────────────────────────────────────────
 
 install_rustdesk() {
@@ -1190,8 +1236,8 @@ EOF
     cat > /etc/systemd/system/ods-rustdesk-enterprise.service << 'EOF'
 [Unit]
 Description=ODS Enterprise Remote Access (RustDesk System Service)
-After=network-online.target graphical.target
-Wants=network-online.target graphical.target
+After=network-online.target ods-kiosk.service
+Wants=network-online.target
 
 [Service]
 Type=simple
@@ -1205,7 +1251,7 @@ StandardOutput=journal
 StandardError=journal
 
 [Install]
-WantedBy=graphical.target multi-user.target
+WantedBy=multi-user.target
 EOF
 
     systemctl daemon-reload
@@ -1295,7 +1341,7 @@ main() {
 
         set_hostname          # Generate unique three-word hostname
         enroll_esper          # Esper MDM enrollment
-        install_rustdesk      # RustDesk remote access
+        configure_rustdesk    # RustDesk key config only (~10s, binary already installed in Phase 1)
         finalize_phase2       # Disable service + reboot to production
     else
         # ══════════════════════════════════════════════════════════════════
@@ -1314,6 +1360,7 @@ main() {
         deploy_kiosk_scripts
         deploy_plymouth
         configure_boot
+        install_rustdesk      # Install RustDesk binary + deps in Phase 1 (generic, slow)
         finalize_phase1       # Set phase=2 marker + shutdown for cloning
     fi
 }
