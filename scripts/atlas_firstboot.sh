@@ -208,18 +208,19 @@ deploy_services() {
     log "⚙️  Step 5: Deploying systemd services..."
 
     # --- ods-kiosk.service ---
+    # Phase selector gates between Phase 2 (enrollment) and Phase 3 (production)
     cat > /etc/systemd/system/ods-kiosk.service << 'EOF'
 [Unit]
-Description=ODS Chromium Kiosk (X11 + Chromium)
+Description=ODS Kiosk Boot (Phase Selector)
 # Start after webserver is up. Do NOT wait for plymouth-hold.
-# Kiosk wrapper handles Plymouth deactivate/quit directly.
+# Phase selector routes to enrollment boot or production wrapper.
 After=ods-webserver.service
 Wants=ods-webserver.service
 
 [Service]
 Type=simple
 User=root
-ExecStart=/usr/local/bin/ods-kiosk-wrapper.sh
+ExecStart=/usr/local/bin/ods-phase-selector.sh
 Restart=always
 RestartSec=10
 StartLimitIntervalSec=0
@@ -413,17 +414,26 @@ EOF
 # ─── Step 6: Deploy Kiosk Scripts ──────────────────────────────────────────
 
 deploy_kiosk_scripts() {
-    log "🖥️  Step 6: Deploying kiosk scripts..."
+    log "🖥️  Step 6: Deploying kiosk scripts (v8-0-6-FLASH)..."
 
-    # --- start-kiosk.sh ---
+    local REPO_SCRIPTS="/tmp/atlas_repo/scripts"
+
+    # --- start-kiosk.sh (v8-0-6-FLASH: --app mode for overlay compatibility) ---
     cat > /usr/local/bin/start-kiosk.sh << 'SCRIPT'
 #!/bin/bash
-# ODS Player OS - Start Kiosk (no loader - direct page loading)
+# ODS Player OS - Start Kiosk v8-0-6-FLASH
+# Uses --app mode (not --kiosk) so overlay can stay above
+# Openbox handles maximization and decoration removal
 export DISPLAY=:0
+export HOME=/home/signage
 
-chromium \
-  --no-sandbox \
-  --kiosk \
+xhost +local: 2>/dev/null || true
+chown -R signage:signage /home/signage/.config/chromium 2>/dev/null
+rm -f /home/signage/.config/chromium/SingletonLock 2>/dev/null
+
+exec chromium --no-sandbox \
+  --app="http://localhost:8080/network_setup.html" \
+  --start-maximized \
   --noerrdialogs \
   --disable-infobars \
   --disable-translate \
@@ -433,15 +443,15 @@ chromium \
   --disable-component-update \
   --check-for-update-interval=31536000 \
   --autoplay-policy=no-user-gesture-required \
-  --start-fullscreen \
   --force-device-scale-factor=${ODS_SCALE:-1} \
   --remote-debugging-port=9222 \
-  --default-background-color=000000 \
   --password-store=basic \
   --credentials-enable-service=false \
   --disable-save-password-bubble \
   --disable-autofill-keyboard-accessory-view \
-  "http://localhost:8080/network_setup.html"
+  --default-background-color=000000 \
+  --force-dark-mode \
+  --disable-gpu-compositing
 SCRIPT
     chmod +x /usr/local/bin/start-kiosk.sh
 
@@ -459,185 +469,47 @@ SCRIPT
 EOF
     log "  ✅ Chromium managed policy deployed"
 
-    # --- ods-kiosk-wrapper.sh ---
-    cat > /usr/local/bin/ods-kiosk-wrapper.sh << 'SCRIPT'
-#!/bin/bash
-# ODS Kiosk Wrapper v11 — Premium boot pipeline
-# Pipeline: VT1 blackout → Plymouth deactivate → Xorg (black root) → Chromium (FOUC guard)
-# v11: Xorg grey flash fixed (no -background none flag, xsetroot in ready loop)
-# v11: Reverted to VT1 (VT7 caused AIGLX VT-switch)
-# v11: Plymouth-quit NOT masked (masking caused boot text leakage)
-LOG_DIR="/home/signage/ODS/logs/boot"
-mkdir -p "$LOG_DIR"
-BOOT_LOG="$LOG_DIR/boot_$(date +%Y%m%d_%H%M%S).log"
-
-log() {
-    local ts=$(date '+%Y-%m-%d %H:%M:%S.%N' | cut -c1-23)
-    local msg="$ts [WRAPPER] $1"
-    echo "$msg" >> "$BOOT_LOG"
-    echo "$msg"
-}
-
-log "Starting ODS kiosk wrapper v11..."
-
-# ── BOOT DIAGNOSTICS ─────────────────────────────────────────────────
-# Capture systemd boot timeline for remote analysis
-journalctl -b --no-pager -o short-monotonic > "$LOG_DIR/systemd_boot.log" 2>/dev/null &
-log "Boot diagnostics capture started"
-
-# Wait for DRM display
-TIMEOUT=30
-ELAPSED=0
-while [ ! -e /dev/dri/card* ] 2>/dev/null; do
-    sleep 1
-    ELAPSED=$((ELAPSED + 1))
-    if [ $ELAPSED -ge $TIMEOUT ]; then
-        log "ERROR: DRM device not found after ${TIMEOUT}s"
-        break
+    # --- ods-kiosk-wrapper.sh (v8-0-6-FLASH) ---
+    # Copy from repo scripts/ instead of inline heredoc for maintainability
+    if [ -f "$REPO_SCRIPTS/ods-kiosk-wrapper-v8-0-6.sh" ]; then
+        cp "$REPO_SCRIPTS/ods-kiosk-wrapper-v8-0-6.sh" /usr/local/bin/ods-kiosk-wrapper.sh
+        log "  ✅ ods-kiosk-wrapper.sh deployed (v8-0-6-FLASH from repo)"
+    else
+        log "  ⚠️  ods-kiosk-wrapper-v8-0-6.sh not found in repo — using inline fallback"
+        # Fallback: copy from assets if repo scripts missing
+        cp /tmp/atlas_repo/scripts/ods-kiosk-wrapper-v8-0-6.sh /usr/local/bin/ods-kiosk-wrapper.sh 2>/dev/null || true
     fi
-done
-log "DRM device ready (${ELAPSED}s)"
-
-# ── STAGE 1: VT1 BLACKOUT ────────────────────────────────────────────
-# Paint VT1 pitch black BEFORE Plymouth releases DRM
-log "Painting VT1 black..."
-export TERM=linux
-echo 0 > /proc/sys/kernel/printk 2>/dev/null || true
-for tty in /dev/tty1 /dev/tty2 /dev/tty3; do
-    setterm --foreground black --background black --cursor off > "$tty" 2>/dev/null || true
-    printf '\033[2J\033[H\033[?25l' > "$tty" 2>/dev/null || true
-    stty -echo -F "$tty" 2>/dev/null || true
-done
-# Framebuffer — raw black pixels
-dd if=/dev/zero of=/dev/fb0 bs=65536 count=512 conv=notrunc 2>/dev/null || true
-log "VT1 blackout complete"
-
-# ── STAGE 2: PLYMOUTH DEACTIVATE ─────────────────────────────────────
-# CRITICAL: Kill ALL console output BEFORE releasing DRM.
-# Without this, systemd journal messages forwarded to /dev/kmsg flash
-# on tty1 during the ~2s Plymouth→Xorg handoff window ([OK] messages).
-dmesg -D 2>/dev/null || true          # Disable kernel console printk entirely
-echo 0 > /proc/sys/kernel/printk 2>/dev/null || true  # Belt-and-suspenders
-# deactivate releases DRM for Xorg. Plymouth quit handled by Stage 6.
-touch /tmp/ods-kiosk-starting
-plymouth deactivate 2>/dev/null || true
-log "Plymouth deactivated (DRM released for Xorg, console output suppressed)"
-
-# ── STAGE 2b: POST-DEACTIVATE BLACKOUT ────────────────────────────────
-# CRITICAL: Plymouth was COVERING tty1's text buffer. When Plymouth
-# deactivates, the kernel restores tty1's buffer to the framebuffer —
-# exposing all the [OK] messages that were printed during boot.
-# We must clear tty1 AND the framebuffer AGAIN immediately.
-for tty in /dev/tty1 /dev/tty2 /dev/tty3; do
-    printf '\033[2J\033[H\033[?25l' > "$tty" 2>/dev/null || true
-    setterm --foreground black --background black --cursor off > "$tty" 2>/dev/null || true
-done
-dd if=/dev/zero of=/dev/fb0 bs=65536 count=512 conv=notrunc 2>/dev/null || true
-log "Post-deactivate blackout complete (tty1 buffer cleared)"
-
-# ── STAGE 3: X SERVER (grey flash eliminated) ────────────────────────
-# The modeset driver re-initializes kms color map 6+ times during startup.
-# A single xsetroot won't cover all resets. Solution: continuous repaint loop.
-export HOME=/home/signage
-Xorg :0 -nolisten tcp -novtswitch vt1 &
-
-# Wait for Xorg to accept connections
-for i in $(seq 1 120); do
-    if xdpyinfo -display :0 >/dev/null 2>&1; then break; fi
-    sleep 0.05
-done
-export DISPLAY=:0
-
-# CONTINUOUS black repaint — covers all modeset color map reinitializations
-# Runs for 10s in background, repainting black every 50ms
-(
-    for j in $(seq 1 200); do
-        xsetroot -solid "#000000" 2>/dev/null
-        sleep 0.05
-    done
-) &
-BLACK_LOOP_PID=$!
-log "X server started — continuous black repaint active"
-
-# ── SLEEP PREVENTION ──────────────────────────────────────────────────
-xset -dpms 2>/dev/null || true
-xset s off 2>/dev/null || true
-xset s noblank 2>/dev/null || true
-
-# ── STAGE 4: WINDOW MANAGER + CHROMIUM ────────────────────────────────
-openbox --config-file /etc/ods/openbox-rc.xml &
-unclutter -idle 0.01 -root &
-log "Openbox started"
-
-/usr/local/bin/ods-display-config.sh 2>/dev/null || true
-
-# Detect screen resolution and set scale
-SCREEN_W=$(xrandr 2>/dev/null | grep '*' | head -1 | awk '{print $1}' | cut -dx -f1)
-if [ -z "$SCREEN_W" ] || [ "$SCREEN_W" -eq 0 ] 2>/dev/null; then
-    SCREEN_W=1920
-fi
-if [ "$SCREEN_W" -ge 3000 ]; then
-    export ODS_SCALE=2
-elif [ "$SCREEN_W" -ge 2000 ]; then
-    export ODS_SCALE=1.5
-else
-    export ODS_SCALE=1
-fi
-log "Screen: ${SCREEN_W}px, Scale: ${ODS_SCALE}"
-
-# Force dark GTK theme — Chromium uses GTK for initial canvas color.
-# Without a dark theme, Chromium flashes white before page CSS loads.
-export GTK_THEME="Adwaita:dark"
-export GTK2_RC_FILES="/usr/share/themes/Adwaita-dark/gtk-2.0/gtkrc"
-mkdir -p /home/signage/.config/gtk-3.0
-cat > /home/signage/.config/gtk-3.0/settings.ini << 'GTK'
-[Settings]
-gtk-application-prefer-dark-theme=1
-gtk-theme-name=Adwaita-dark
-GTK
-log "Dark GTK theme set"
-
-# Launch Chromium (page has FOUC guard — starts invisible, fades in when ready)
-/usr/local/bin/start-kiosk.sh &
-KIOSK_PID=$!
-log "Chromium launched (PID: $KIOSK_PID)"
-
-# ── STAGE 5: WAIT FOR PAGE READY ─────────────────────────────────────
-# network_setup.html calls /api/signal-ready on load → touches this file
-SIGNAL_FILE="/tmp/ods-loader-ready"
-rm -f "$SIGNAL_FILE"
-TIMEOUT=45
-ELAPSED=0
-log "Waiting for page ready signal..."
-
-while [ ! -f "$SIGNAL_FILE" ]; do
-    sleep 0.5
-    ELAPSED=$((ELAPSED + 1))
-    if [ $ELAPSED -ge $((TIMEOUT * 2)) ]; then
-        log "WARN: Page ready not received after ${TIMEOUT}s"
-        break
-    fi
-done
-
-[ -f "$SIGNAL_FILE" ] && log "Page ready signal received"
-
-# ── STAGE 6: PLYMOUTH QUIT (delayed until page is rendered) ──────────
-# Now that Chromium has rendered, safely quit Plymouth
-plymouth quit 2>/dev/null || true
-log "Plymouth quit (delayed — page is now visible)"
-log "Boot pipeline complete."
-
-# Clean up boot signals
-rm -f /tmp/ods-kiosk-starting /tmp/ods-loader-ready
-
-# Clean up old boot logs (keep 7 days)
-find "$LOG_DIR" -name "boot_*.log" -type f -mtime +7 -delete 2>/dev/null || true
-
-# Wait for kiosk process
-wait $KIOSK_PID
-log "Kiosk process exited"
-SCRIPT
     chmod +x /usr/local/bin/ods-kiosk-wrapper.sh
+
+
+    # --- ods-phase-selector.sh (Phase 2/3 boot gate) ---
+    cat > /usr/local/bin/ods-phase-selector.sh << 'SCRIPT'
+#!/bin/bash
+# ODS Phase Selector — Gates between Phase 2 (enrollment) and Phase 3 (production)
+ENROLLED_FLAG="/etc/ods/esper_enrolled.flag"
+LOG="/home/signage/ODS/logs/boot/phase_selector.log"
+log() { echo "$(date '+%Y-%m-%d %H:%M:%S.%3N') [PHASE] $1" | tee -a "$LOG"; }
+if [ -f "$ENROLLED_FLAG" ]; then
+    log "Phase 3: Enrolled flag found — launching production boot (v8-0-6-FLASH)"
+    exec /usr/local/bin/ods-kiosk-wrapper.sh
+else
+    log "Phase 2: No enrolled flag — launching enrollment boot"
+    exec /usr/local/bin/ods-enrollment-boot.sh
+fi
+SCRIPT
+    chmod +x /usr/local/bin/ods-phase-selector.sh
+    log "  ✅ ods-phase-selector.sh deployed"
+
+    # --- ods-enrollment-boot.sh (Phase 2: sealed splash enrollment) ---
+    if [ -f "$REPO_SCRIPTS/ods-enrollment-boot.sh" ]; then
+        cp "$REPO_SCRIPTS/ods-enrollment-boot.sh" /usr/local/bin/ods-enrollment-boot.sh
+        log "  ✅ ods-enrollment-boot.sh deployed (from repo)"
+    fi
+    chmod +x /usr/local/bin/ods-enrollment-boot.sh 2>/dev/null || true
+
+    # --- Enrollment state directory ---
+    mkdir -p /etc/ods
+    echo 0 > /etc/ods/enrollment_attempts
 
     # --- hide-tty.sh ---
     cat > /usr/local/bin/hide-tty.sh << 'SCRIPT'
@@ -801,6 +673,13 @@ SCRIPT
       <decor>no</decor>
       <maximized>yes</maximized>
     </application>
+    <!-- Boot overlay: fullscreen, always above Chromium -->
+    <application title="BOOT_OVERLAY">
+      <decor>no</decor>
+      <maximized>yes</maximized>
+      <layer>above</layer>
+      <fullscreen>yes</fullscreen>
+    </application>
     <!-- Admin terminal: decorated, always-on-top, centered -->
     <application class="XTerm" title="ODS Admin*">
       <decor>yes</decor>
@@ -870,64 +749,61 @@ LJSON
 # ─── Step 7: Install Plymouth ODS Theme ────────────────────────────────────
 
 deploy_plymouth() {
-    log "🎨 Step 7: Installing Plymouth ODS theme..."
+    log "🎨 Step 7: Installing Plymouth ODS theme (v8-0-6-FLASH pre-built assets)..."
+
+    local THEME_DIR="/usr/share/plymouth/themes/ods"
+    local REPO_ASSETS="/tmp/atlas_repo/assets/plymouth/ods"
 
     # Create theme directory
-    mkdir -p /usr/share/plymouth/themes/ods
+    mkdir -p "$THEME_DIR"
 
-    # Copy theme assets from the cloned repo brand/splash/landscape/
-    if [ -d "/tmp/atlas_repo/brand/splash/landscape" ]; then
-        cp /tmp/atlas_repo/brand/splash/landscape/*.png /usr/share/plymouth/themes/ods/ 2>/dev/null || true
-        # Copy throbber animation frames
-        if [ -d "/tmp/atlas_repo/brand/splash/landscape/throbber" ]; then
-            cp /tmp/atlas_repo/brand/splash/landscape/throbber/*.png /usr/share/plymouth/themes/ods/ 2>/dev/null || true
-            log "  ✅ Throbber frames copied"
-        fi
-        log "  ✅ Plymouth landscape assets copied"
-
-        # Create full-res splash.png for fbi bridge (watermark composited on black canvas)
-        if command -v convert &>/dev/null && [ -f "/usr/share/plymouth/themes/ods/watermark.png" ]; then
-            convert -size 1920x1080 xc:black \
-                /usr/share/plymouth/themes/ods/watermark.png \
-                -gravity center -composite \
-                /usr/share/plymouth/themes/ods/splash.png
-            log "  ✅ splash.png created for fbi bridge (1920x1080)"
+    # ── Copy ALL pre-generated splash assets from repo ────────────────────
+    # These are pre-built PNGs (throbbers, watermark, splash animations,
+    # FBI bridge frames, overlay frames, enrollment frames)
+    if [ -d "$REPO_ASSETS" ]; then
+        cp "$REPO_ASSETS"/*.png "$THEME_DIR/" 2>/dev/null || true
+        cp "$REPO_ASSETS"/*.plymouth "$THEME_DIR/" 2>/dev/null || true
+        local png_count=$(ls "$THEME_DIR"/*.png 2>/dev/null | wc -l)
+        log "  ✅ $png_count pre-generated splash PNGs copied from repo"
+    else
+        log "  ⚠️  repo assets/ not found at $REPO_ASSETS — falling back to brand/"
+        # Fallback to old brand/ path if assets/ doesn't exist
+        if [ -d "/tmp/atlas_repo/brand/splash/landscape" ]; then
+            cp /tmp/atlas_repo/brand/splash/landscape/*.png "$THEME_DIR/" 2>/dev/null || true
+            if [ -d "/tmp/atlas_repo/brand/splash/landscape/throbber" ]; then
+                cp /tmp/atlas_repo/brand/splash/landscape/throbber/*.png "$THEME_DIR/" 2>/dev/null || true
+            fi
+            log "  ✅ Plymouth assets copied from brand/ (legacy fallback)"
         fi
     fi
 
-    # ── 4K SCALING (Issue #2: splash assets too small on 4K) ──────────────
-    # Scale assets for high-resolution displays using ImageMagick
-    local THEME_DIR="/usr/share/plymouth/themes/ods"
-    if command -v convert &>/dev/null; then
-        log "  → Scaling Plymouth assets for 4K/HD compatibility..."
-
-        # watermark.png → 200%
-        if [ -f "$THEME_DIR/watermark.png" ]; then
-            convert "$THEME_DIR/watermark.png" -resize 200% "$THEME_DIR/watermark.png"
-            log "    ✅ watermark.png scaled to 200%"
-        fi
-
-        # bgrt-fallback.png → 135%
-        if [ -f "$THEME_DIR/bgrt-fallback.png" ]; then
-            convert "$THEME_DIR/bgrt-fallback.png" -resize 135% "$THEME_DIR/bgrt-fallback.png"
-            log "    ✅ bgrt-fallback.png scaled to 135%"
-        fi
-
-        # throbber frames → 80%
-        local throbber_count=0
-        for frame in "$THEME_DIR"/throbber-*.png; do
-            if [ -f "$frame" ]; then
-                convert "$frame" -resize 80% "$frame"
-                throbber_count=$((throbber_count + 1))
+    # ── Convert framebuffer PNGs to RGB565 raw ────────────────────────────
+    # The FBI bridge and enrollment animations write raw RGB565 to /dev/fb0.
+    # PNGs are stored in git; raw conversion happens here (fast, ~2min total).
+    if command -v convert &>/dev/null && command -v python3 &>/dev/null; then
+        log "  → Converting framebuffer PNGs to RGB565 raw..."
+        local raw_count=0
+        for png in "$THEME_DIR"/fbi_boot_*.png "$THEME_DIR"/enroll_fbi_*.png \
+                   "$THEME_DIR"/enroll_progress_*.png "$THEME_DIR"/enroll_success.png \
+                   "$THEME_DIR"/enroll_retry_*.png "$THEME_DIR"/enroll_downloading.png \
+                   "$THEME_DIR"/enroll_support.png; do
+            if [ -f "$png" ]; then
+                local raw="${png%.png}.raw"
+                convert "$png" -depth 8 rgb:- | python3 -c "
+import sys
+data=sys.stdin.buffer.read()
+out=bytearray()
+for i in range(0,len(data),3):
+    r,g,b=data[i],data[i+1],data[i+2]
+    rgb565=((r>>3)<<11)|((g>>2)<<5)|(b>>3)
+    out.extend(rgb565.to_bytes(2,byteorder='little'))
+sys.stdout.buffer.write(out)" > "$raw"
+                raw_count=$((raw_count + 1))
             fi
         done
-        if [ $throbber_count -gt 0 ]; then
-            log "    ✅ $throbber_count throbber frames scaled to 80%"
-        fi
-
-        log "  ✅ 4K asset scaling complete"
+        log "  ✅ $raw_count PNGs converted to RGB565 raw"
     else
-        log "  ⚠️  ImageMagick not found — skipping 4K scaling"
+        log "  ⚠️  ImageMagick or python3 not found — skipping RGB565 conversion"
     fi
 
     # Create theme config
@@ -1352,8 +1228,10 @@ main() {
         log "  ✅ Package manager repaired"
 
         set_hostname          # Generate unique three-word hostname
-        enroll_esper          # Esper MDM enrollment
-        configure_rustdesk    # RustDesk key config only (~10s, binary already installed in Phase 1)
+        # NOTE: Esper enrollment and RustDesk are now handled by the Phase 2
+        # sealed-in-splash boot pipeline (ods-enrollment-boot.sh), NOT firstboot.
+        # configure_rustdesk    # Deferred to Phase 2 boot
+        # enroll_esper          # Deferred to Phase 2 boot
         finalize_phase2       # Disable service + reboot to production
     else
         # ══════════════════════════════════════════════════════════════════
