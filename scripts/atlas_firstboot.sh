@@ -484,7 +484,11 @@ log "VT1 painted black"
 # Display ODS splash PNG directly on /dev/fb0 via fbi.
 # This image persists underneath X11 and stays visible until we kill fbi.
 # It bridges the gap between Plymouth and Chromium rendering.
-SPLASH_IMG="/usr/share/plymouth/themes/ods/watermark.png"
+SPLASH_IMG="/usr/share/plymouth/themes/ods/ods-player-boot-splash.png"
+# Fallback to watermark.png if boot splash not available
+if [ ! -f "$SPLASH_IMG" ]; then
+    SPLASH_IMG="/usr/share/plymouth/themes/ods/watermark.png"
+fi
 FBI_PID=""
 
 if [ -f "$SPLASH_IMG" ] && [ -c /dev/fb0 ]; then
