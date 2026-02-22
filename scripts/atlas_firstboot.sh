@@ -1023,6 +1023,10 @@ XORGCFG
         if ! echo "$cmdline" | grep -q "splash"; then
             cmdline="$cmdline splash quiet"
         fi
+        # CRITICAL: Remove console=tty1 — it sends ALL kernel/systemd output
+        # to the physical display, causing [OK] messages to show even with
+        # systemd.show_status=false. Keep only serial console for debugging.
+        cmdline=$(echo "$cmdline" | sed 's/console=tty1 //g; s/ console=tty1//g')
         # Add plymouth.ignore-serial-consoles
         if ! echo "$cmdline" | grep -q "plymouth.ignore-serial-consoles"; then
             cmdline="$cmdline plymouth.ignore-serial-consoles"
@@ -1286,6 +1290,12 @@ main() {
         log "🚀 ODS Atlas — Phase 2: Device Enrollment"
         log "📋 This device was cloned from the golden image"
         log "💻 Current host: $(hostname)"
+
+        # FIX: Repair dpkg state — Phase 1 shutdown may leave dpkg interrupted
+        log "  → Repairing package manager state..."
+        dpkg --configure -a 2>/dev/null || true
+        apt-get -f install -y 2>/dev/null || true
+        log "  ✅ Package manager repaired"
 
         set_hostname          # Generate unique three-word hostname
         enroll_esper          # Esper MDM enrollment
