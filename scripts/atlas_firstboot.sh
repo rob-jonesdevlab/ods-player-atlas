@@ -211,7 +211,9 @@ deploy_services() {
     cat > /etc/systemd/system/ods-kiosk.service << 'EOF'
 [Unit]
 Description=ODS Chromium Kiosk (X11 + Chromium)
-After=ods-webserver.service ods-plymouth-hold.service
+# Start after webserver is up. Do NOT wait for plymouth-hold.
+# Kiosk wrapper handles Plymouth deactivate/quit directly.
+After=ods-webserver.service
 Wants=ods-webserver.service
 
 [Service]
@@ -225,7 +227,7 @@ StandardOutput=journal
 StandardError=journal
 
 [Install]
-WantedBy=graphical.target
+WantedBy=multi-user.target
 EOF
 
     # --- ods-webserver.service ---
@@ -265,19 +267,26 @@ RestartSec=10
 WantedBy=multi-user.target
 EOF
 
-    # --- ods-plymouth-hold.service (Issue #1 fix: poll-based, not fixed timer) ---
+    # --- ods-plymouth-hold.service ---
+    # CRITICAL: This service BLOCKS plymouth-quit.service from killing Plymouth
+    # until the kiosk wrapper signals it's taken over the display.
+    # Without this, plymouth-quit kills Plymouth at ~10s, leaving a 26s gap
+    # of bare TTY before Xorg starts.
     cat > /etc/systemd/system/ods-plymouth-hold.service << 'EOF'
 [Unit]
-Description=ODS Plymouth Hold - Keep splash until kiosk signals readiness
+Description=ODS Plymouth Hold - Block plymouth-quit until kiosk is ready
 DefaultDependencies=no
 After=plymouth-start.service
-Before=getty@tty1.service
+Before=plymouth-quit.service plymouth-quit-wait.service getty@tty1.service
 
 [Service]
 Type=oneshot
-ExecStart=/bin/bash -c 'for i in $(seq 1 60); do [ -f /tmp/ods-kiosk-starting ] && break; sleep 0.5; done; sleep 2'
+# Wait for kiosk wrapper to signal it has taken over the display
+# /tmp/ods-kiosk-starting is touched by the wrapper AFTER VT1 blackout
+# Max wait 90s to prevent boot hang
+ExecStart=/bin/bash -c 'for i in $(seq 1 180); do [ -f /tmp/ods-kiosk-starting ] && break; sleep 0.5; done'
 RemainAfterExit=yes
-TimeoutStartSec=45
+TimeoutStartSec=95
 
 [Install]
 WantedBy=sysinit.target
