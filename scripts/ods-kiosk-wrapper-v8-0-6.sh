@@ -39,14 +39,11 @@ STOP_FBI="/tmp/ods-stop-fbi"
 rm -f "$STOP_FBI"
 (
     while [ ! -f "$STOP_FBI" ]; do
-        dd if="$ANIM_DIR/fbi_boot_1.raw" of=/dev/fb0 bs=65536 2>/dev/null; [ -f "$STOP_FBI" ] && break; sleep 0.15
-        dd if="$ANIM_DIR/fbi_boot_2.raw" of=/dev/fb0 bs=65536 2>/dev/null; [ -f "$STOP_FBI" ] && break; sleep 0.175
-        dd if="$ANIM_DIR/fbi_boot_3.raw" of=/dev/fb0 bs=65536 2>/dev/null; [ -f "$STOP_FBI" ] && break; sleep 0.20
-        dd if="$ANIM_DIR/fbi_boot_4.raw" of=/dev/fb0 bs=65536 2>/dev/null; [ -f "$STOP_FBI" ] && break; sleep 0.25
-        dd if="$ANIM_DIR/fbi_boot_5.raw" of=/dev/fb0 bs=65536 2>/dev/null; [ -f "$STOP_FBI" ] && break; sleep 0.25
-        dd if="$ANIM_DIR/fbi_boot_6.raw" of=/dev/fb0 bs=65536 2>/dev/null; [ -f "$STOP_FBI" ] && break; sleep 0.30
-        dd if="$ANIM_DIR/fbi_boot_7.raw" of=/dev/fb0 bs=65536 2>/dev/null; [ -f "$STOP_FBI" ] && break; sleep 0.30
-        dd if="$ANIM_DIR/fbi_boot_8.raw" of=/dev/fb0 bs=65536 2>/dev/null; [ -f "$STOP_FBI" ] && break; sleep 0.30
+        dd if="$ANIM_DIR/fbi_boot_1.raw" of=/dev/fb0 bs=65536 2>/dev/null; [ -f "$STOP_FBI" ] && break; sleep 0.20
+        dd if="$ANIM_DIR/fbi_boot_2.raw" of=/dev/fb0 bs=65536 2>/dev/null; [ -f "$STOP_FBI" ] && break; sleep 0.25
+        dd if="$ANIM_DIR/fbi_boot_3.raw" of=/dev/fb0 bs=65536 2>/dev/null; [ -f "$STOP_FBI" ] && break; sleep 0.25
+        dd if="$ANIM_DIR/fbi_boot_4.raw" of=/dev/fb0 bs=65536 2>/dev/null; [ -f "$STOP_FBI" ] && break; sleep 0.30
+        dd if="$ANIM_DIR/fbi_boot_5.raw" of=/dev/fb0 bs=65536 2>/dev/null; [ -f "$STOP_FBI" ] && break; sleep 0.35
     done
 ) &
 FBI_ANIM_PID=$!

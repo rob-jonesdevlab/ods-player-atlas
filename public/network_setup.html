@@ -77,8 +77,8 @@
     <header class="w-full pt-32 pb-6 px-10 flex flex-col items-center justify-center z-10">
     </header>
 
-    <!-- Main Content -->
-    <main class="flex-1 flex flex-col items-center justify-center w-full px-4 z-10">
+    <!-- Main Content — pb-32 keeps card above the status pill at 90% -->
+    <main class="flex-1 flex flex-col items-center justify-center w-full px-4 pb-32 z-10">
         <div class="glass-card rounded-2xl p-10 md:p-14 flex flex-col items-center shadow-2xl">
             <!-- Title -->
             <h2 class="text-3xl font-bold text-gray-900 mb-3 whitespace-nowrap">Network Setup</h2>
@@ -98,15 +98,16 @@
     </main>
 
 
-    <!-- Footer / Status Pill (50% larger) -->
-    <footer class="pb-12 pt-6 w-full flex justify-center z-10">
+    <!-- Footer / Status Pill — positioned at 90% vertical (matches throbber .90) -->
+    <footer class="absolute w-full flex justify-center z-10" style="top: 90%; transform: translateY(-50%);">
         <div class="glass-pill px-7 py-3.5 rounded-full inline-flex items-center gap-3 shadow-lg">
             <span class="relative flex h-3.5 w-3.5">
                 <span
                     class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
                 <span class="relative inline-flex rounded-full h-3.5 w-3.5 bg-amber-500"></span>
             </span>
-            <span class="text-gray-900 text-sm font-medium tracking-wide">Waiting for network...</span>
+            <span class="text-gray-900 font-medium tracking-wide" style="font-size: 1.05rem;">Waiting for
+                network...</span>
         </div>
     </footer>
 
