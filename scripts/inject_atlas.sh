@@ -110,6 +110,11 @@ main() {
     cp "$SCRIPT_DIR/atlas_secrets.conf" "$WORK_DIR/rootfs/usr/local/etc/"
     chmod 600 "$WORK_DIR/rootfs/usr/local/etc/atlas_secrets.conf"
 
+    # Symlink for enrollment boot (reads from /etc/ods/)
+    log "📋 Creating /etc/ods/ secrets symlink"
+    mkdir -p "$WORK_DIR/rootfs/etc/ods"
+    ln -sf /usr/local/etc/atlas_secrets.conf "$WORK_DIR/rootfs/etc/ods/atlas_secrets.conf"
+
     # Enable the service via symlink (can't use systemctl on a mounted image)
     log "📋 Enabling service at multi-user.target..."
     mkdir -p "$WORK_DIR/rootfs/etc/systemd/system/multi-user.target.wants"

@@ -749,7 +749,7 @@ LJSON
 # ─── Step 7: Install Plymouth ODS Theme ────────────────────────────────────
 
 deploy_plymouth() {
-    log "🎨 Step 7: Installing Plymouth ODS theme (v8-0-6-FLASH pre-built assets)..."
+    log "🎨 Step 7: Installing Plymouth ODS theme (v8-2-0-FLASH 4K premium splash)..."
 
     local THEME_DIR="/usr/share/plymouth/themes/ods"
     local REPO_ASSETS="/tmp/atlas_repo/assets/plymouth/ods"
@@ -765,6 +765,14 @@ deploy_plymouth() {
         cp "$REPO_ASSETS"/*.plymouth "$THEME_DIR/" 2>/dev/null || true
         local png_count=$(ls "$THEME_DIR"/*.png 2>/dev/null | wc -l)
         log "  ✅ $png_count pre-generated splash PNGs copied from repo"
+    elif [ -d "/tmp/atlas_repo/brand/splash/generated" ]; then
+        # v8-2-0+ path: generated assets include 4K watermark, throbbers, FBI frames, etc.
+        cp /tmp/atlas_repo/brand/splash/generated/*.png "$THEME_DIR/" 2>/dev/null || true
+        # Copy pre-built raw files too (saves ~2min of on-device conversion)
+        cp /tmp/atlas_repo/brand/splash/generated/*.raw "$THEME_DIR/" 2>/dev/null || true
+        local png_count=$(ls "$THEME_DIR"/*.png 2>/dev/null | wc -l)
+        local raw_count=$(ls "$THEME_DIR"/*.raw 2>/dev/null | wc -l)
+        log "  ✅ $png_count PNGs + $raw_count pre-built RAWs copied from brand/splash/generated/"
     else
         log "  ⚠️  repo assets/ not found at $REPO_ASSETS — falling back to brand/"
         # Fallback to old brand/ path if assets/ doesn't exist
@@ -820,11 +828,11 @@ ImageDir=/usr/share/plymouth/themes/ods
 DialogHorizontalAlignment=.5
 DialogVerticalAlignment=.7
 TitleHorizontalAlignment=.5
-TitleVerticalAlignment=.382
+TitleVerticalAlignment=.5
 HorizontalAlignment=.5
-VerticalAlignment=.89
+VerticalAlignment=.90
 WatermarkHorizontalAlignment=.5
-WatermarkVerticalAlignment=.7
+WatermarkVerticalAlignment=.5
 Transition=none
 TransitionDuration=0.0
 BackgroundStartColor=0x000000
