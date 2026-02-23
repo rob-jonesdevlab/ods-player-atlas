@@ -12,12 +12,13 @@
 ```
 ~/atlas-build/
 ├── Armbian_26.2.1_Rpi4b_trixie_current_6.18.9_minimal.img   # Base image
-├── scripts/                                                    # Symlink or clone
+├── scripts/                                                    # SCP'd from Mac
 │   ├── inject_atlas.sh
 │   ├── atlas_firstboot.sh
 │   ├── atlas-firstboot.service
+│   ├── ods-enrollment-boot.sh
 │   └── atlas_secrets.conf                                      # NOT in git
-└── ods-atlas-golden-v7-11-OPENBOX.img                            # Output (built)
+└── ods-atlas-golden-v8-2-1-FLASH.img                           # Output (built)
 ```
 
 ### `atlas_secrets.conf` (template)

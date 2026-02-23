@@ -1,8 +1,8 @@
 # ODS Player OS Atlas — Architecture
 
-**Last Updated:** February 21, 2026  
-**Golden Image:** v7-11-OPENBOX  
-**Status:** Active iteration — boot UX polish sprint
+**Last Updated:** February 22, 2026  
+**Golden Image:** v8-2-1-FLASH  
+**Status:** Active iteration — boot UX polish sprint complete, enrollment debugging
 
 ---
 
@@ -47,40 +47,57 @@ Base Armbian .img
         Production kiosk in ~15 minutes
 ```
 
-## Current State (v7-11)
+## Current State (v8-2-1-FLASH)
 
-### Completed
-- ✅ 11-step automated firstboot (`atlas_firstboot.sh`, ~1270 lines)
+### Completed — Core
+- ✅ 11-step automated firstboot (`atlas_firstboot.sh`, ~1280 lines)
 - ✅ TTY flash fix — VT1 pre-painted black (tty1-3 + framebuffer + kernel printk)
-- ✅ Grey flash fix — removed `-background none` (grey stipple), continuous xsetroot repaint loop
+- ✅ Grey flash fix — removed `-background none`, continuous xsetroot repaint loop
 - ✅ Plymouth hold — `ods-plymouth-hold.service` blocks `plymouth-quit.service` until kiosk ready
 - ✅ Admin auth — `su`/PAM-based (yescrypt-safe, confirmed working on device)
 - ✅ Chromium managed policy — password popup and autofill disabled
-- ✅ Dark GTK theme — Adwaita-dark via env vars + settings.ini (prevents Chromium white flash)
+- ✅ Dark GTK theme — Adwaita-dark via env vars + settings.ini
 - ✅ VT lockdown — getty tty1-6 masked, SysRq disabled, Xorg `DontVTSwitch`
 - ✅ System config shortcut — `Ctrl+Alt+Shift+O` opens diagnostics panel
-- ✅ Shutdown splash — Plymouth on reboot/poweroff with correct service deps
-- ✅ Plymouth ODS theme — bold font, black background, throbber animation
-- ✅ Sleep prevention — `consoleblank=0`, DPMS off, suspend/hibernate masked, 5-min timer
+- ✅ Sleep prevention — `consoleblank=0`, DPMS off, suspend/hibernate masked
 - ✅ RustDesk remote access — self-hosted relay, systemd service
-- ✅ Esper MDM enrollment — Linux agent
+- ✅ Esper MDM enrollment — Phase 2 sealed-in-splash enrollment boot
 - ✅ Health monitor service
 - ✅ Boot diagnostics — systemd journal capture per boot
 
-### Version History (v7-x sprint)
+### Completed — v8 Boot UX Sprint
+- ✅ 4K Plymouth theme — 3840x2160 watermark, transparent bgrt-fallback
+- ✅ Throbber alignment — `.90` vertical position across all boot stages
+- ✅ Watermark alignment — `.5` vertical (centered on 4K display)
+- ✅ 54pt DejaVu Sans Mono splash text — monospace padded for stable animation
+- ✅ 5-frame FBI boot bridge — "Booting system" with animated dots (RGB565 raw)
+- ✅ 5-frame "Starting services" splash — `splash_ods_1-5.png`
+- ✅ 5-frame "Launching ODS" overlay — `overlay_launch_1-5.png`
+- ✅ Enrollment splash — "Connecting to server" + "Enrollment in progress" (stage-tied)
+- ✅ Status pill alignment — `.90` vertical on player_link.html and network_setup.html
+- ✅ Status pill font increase — 1.05rem text, 0.9rem details
+- ✅ Unused pairing.html deleted
+- ✅ Secrets path symlink — `/etc/ods/atlas_secrets.conf` → `/usr/local/etc/`
+- ✅ `brand/splash/generated/` asset path — pre-built 4K PNGs + RGB565 raws
+- ✅ `assets/plymouth/ods/` upgraded to 4K — replaced all HD (1920x1080) assets
+
+### Version History
 
 | Version | Commit | Key Change |
 |---------|--------|------------|
-| v7-5 | `9470538` | Admin auth fix (spwd removed), kiosk wrapper v9, Chromium policy |
+| v7-5 | `9470538` | Admin auth fix, kiosk wrapper v9, Chromium policy |
 | v7-6 | `4e61f5b` | su/PAM auth (yescrypt-safe), dark GTK theme |
 | v7-7 | `e8d9ec5` | Removed `--force-dark-mode` (grey #3C3C3C), delayed plymouth quit |
 | v7-8 | `cbf14b1` | Removed `-background none` (grey stipple), xsetroot in ready loop |
-| v7-9 | `f384229` | Unmasked plymouth-quit (boot text leak fix), reverted VT7→VT1 |
+| v7-9 | `f384229` | Unmasked plymouth-quit, reverted VT7→VT1 |
 | v7-10 | `ecd2562` | ROOT CAUSE: kiosk started 26s after plymouth-quit, service dep fix |
-| v7-11 | `a0ae81b` | Continuous xsetroot repaint loop (covers modeset color map resets) |
+| v7-11 | `a0ae81b` | Continuous xsetroot repaint loop (covers modeset resets) |
+| v8-1-0 | `6e5f0b9` | Premium boot UX: 104 PNGs, 4K watermark, 5-frame FBI, throbber .90 |
+| v8-2-0 | `e6cafbf` | Secrets symlink, Plymouth .90/.5 config, generated assets path |
+| v8-2-1 | `312881f` | 4K watermark fix in assets/, enrollment 5-frame splash, HD purge |
 
 ### Pending / Next Version
-- [ ] Static splash image during Xorg startup gap
+- [ ] Validate Esper enrollment end-to-end on fresh flash
 - [ ] Wayland/Cage migration for zero-flash boot
 - [ ] OTA updates from ODS Cloud dashboard
 - [ ] Remote background/content push
