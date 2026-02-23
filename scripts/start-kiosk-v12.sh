@@ -1,10 +1,9 @@
 #!/bin/bash
 # ODS Player OS - Start Kiosk v12
 # STABLE BASELINE: "boot-ux-v12-stable"
-#
-# SECURITY NOTE: --no-sandbox is required because Chromium runs as root.
-# The proper fix is to split the kiosk service into privileged (root) and
-# unprivileged (signage) phases. See .arch/boot_ux_pipeline.md for details.
+# SECURITY: Chromium runs as the 'signage' user (not root) to enable sandbox.
+# The wrapper runs as root for Xorg/framebuffer access, then drops privileges
+# to signage for Chromium. This eliminates the --no-sandbox requirement.
 #
 # Chromium policy at /etc/chromium/policies/managed/ods-kiosk.json
 # suppresses the security warning banner:
@@ -20,7 +19,7 @@ xhost +local: 2>/dev/null || true
 chown -R signage:signage /home/signage/.config/chromium 2>/dev/null
 rm -f /home/signage/.config/chromium/SingletonLock 2>/dev/null
 
-exec chromium --no-sandbox \
+exec sudo -u signage chromium \
   --kiosk \
   --start-fullscreen \
   --noerrdialogs \

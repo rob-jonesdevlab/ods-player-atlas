@@ -464,7 +464,8 @@ SCRIPT
   "AutofillCreditCardEnabled": false,
   "ImportSavedPasswords": false,
   "CredentialProviderPromoEnabled": false,
-  "BrowserSignin": 0
+  "BrowserSignin": 0,
+  "CommandLineFlagSecurityWarningsEnabled": false
 }
 EOF
     log "  ✅ Chromium managed policy deployed"
