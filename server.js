@@ -33,6 +33,40 @@ app.get('/api/status', (req, res) => {
     });
 });
 
+// Scan for available WiFi networks
+app.get('/api/wifi/scan', (req, res) => {
+    exec('iwlist wlan0 scan 2>/dev/null | grep -E "ESSID|Signal level" | paste - - | sort -t= -k3 -rn', { timeout: 15000 }, (error, stdout) => {
+        if (error) {
+            // Fallback: try nmcli
+            exec('nmcli -t -f SSID,SIGNAL device wifi list 2>/dev/null', { timeout: 10000 }, (err2, stdout2) => {
+                if (err2 || !stdout2.trim()) {
+                    return res.json({ networks: [], error: 'WiFi scan unavailable' });
+                }
+                const networks = stdout2.trim().split('\n')
+                    .map(line => { const [ssid, signal] = line.split(':'); return { ssid, signal: parseInt(signal) || 0 }; })
+                    .filter(n => n.ssid && n.ssid.length > 0);
+                res.json({ networks });
+            });
+            return;
+        }
+        const networks = [];
+        const lines = stdout.trim().split('\n');
+        lines.forEach(line => {
+            const ssidMatch = line.match(/ESSID:"(.+?)"/);
+            const signalMatch = line.match(/Signal level[=:](-?\d+)/);
+            if (ssidMatch && ssidMatch[1]) {
+                networks.push({
+                    ssid: ssidMatch[1],
+                    signal: signalMatch ? parseInt(signalMatch[1]) : 0
+                });
+            }
+        });
+        // Deduplicate by SSID
+        const unique = [...new Map(networks.map(n => [n.ssid, n])).values()];
+        res.json({ networks: unique });
+    });
+});
+
 // Configure WiFi
 app.post('/api/wifi/configure', (req, res) => {
     const { ssid, password } = req.body;
