@@ -391,27 +391,24 @@
                             <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
                             <span class="text-sm">Synchronized</span>
                         </div>
+                        <button onclick="updateTimezone()"
+                            class="mt-3 px-5 py-2 bg-primary hover:bg-blue-600 rounded-lg text-white text-sm font-medium transition-colors flex items-center gap-2">
+                            <span class="material-symbols-outlined text-lg">save</span>
+                            Update
+                        </button>
                     </div>
                     <div class="col-span-2">
                         <label class="block text-sm font-medium text-slate-400 mb-1.5">Timezone</label>
-                        <div class="flex gap-3">
-                            <select id="time-timezone"
-                                class="px-4 py-2.5 bg-slate-700 border border-slate-600 rounded-lg text-white focus:border-primary outline-none text-sm"
-                                style="flex: 0.65;">
-                                <option value="America/Los_Angeles" selected>Pacific (PT)</option>
-                                <option value="America/Denver">Mountain (MT)</option>
-                                <option value="America/Chicago">Central (CT)</option>
-                                <option value="America/New_York">Eastern (ET)</option>
-                                <option value="America/Anchorage">Alaska (AKT)</option>
-                                <option value="Pacific/Honolulu">Hawaii (HST)</option>
-                                <option value="UTC">UTC</option>
-                            </select>
-                            <button onclick="updateTimezone()"
-                                class="px-5 py-2.5 bg-primary hover:bg-blue-600 rounded-lg text-white text-sm font-medium transition-colors flex items-center gap-2">
-                                <span class="material-symbols-outlined text-lg">save</span>
-                                Update
-                            </button>
-                        </div>
+                        <select id="time-timezone"
+                            class="w-full px-4 py-2.5 bg-slate-700 border border-slate-600 rounded-lg text-white focus:border-primary outline-none text-sm">
+                            <option value="America/Los_Angeles" selected>Pacific (PT)</option>
+                            <option value="America/Denver">Mountain (MT)</option>
+                            <option value="America/Chicago">Central (CT)</option>
+                            <option value="America/New_York">Eastern (ET)</option>
+                            <option value="America/Anchorage">Alaska (AKT)</option>
+                            <option value="Pacific/Honolulu">Hawaii (HST)</option>
+                            <option value="UTC">UTC</option>
+                        </select>
                     </div>
                 </div>
             </div>
@@ -443,7 +440,7 @@
                     </h3>
                     <p class="text-sm text-slate-400 mb-4">Restart the player system.</p>
                     <button
-                        onclick="confirmAction('Reboot Device', 'The player will restart. This takes about 30 seconds.', 'restart_alt', () => systemAction('reboot'))"
+                        onclick="confirmAction('Reboot Device', 'The player will restart and reload all services.', 'restart_alt', () => systemAction('reboot'))"
                         class="px-6 py-2.5 bg-amber-600 hover:bg-amber-500 rounded-lg text-white text-sm font-medium transition-colors flex items-center gap-2">
                         <span class="material-symbols-outlined text-lg">restart_alt</span>
                         Reboot

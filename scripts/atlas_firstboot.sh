@@ -753,37 +753,25 @@ deploy_plymouth() {
     log "🎨 Step 7: Installing Plymouth ODS theme (v8-2-0-FLASH 4K premium splash)..."
 
     local THEME_DIR="/usr/share/plymouth/themes/ods"
-    local REPO_ASSETS="/tmp/atlas_repo/assets/plymouth/ods"
+    local REPO_ASSETS="/tmp/atlas_repo/brand/splash/generated"
 
     # Create theme directory
     mkdir -p "$THEME_DIR"
 
     # ── Copy ALL pre-generated splash assets from repo ────────────────────
-    # These are pre-built PNGs (throbbers, watermark, splash animations,
-    # FBI bridge frames, overlay frames, enrollment frames)
+    # Single source of truth: brand/splash/generated/
+    # Contains: throbbers, watermark, splash animations, FBI bridge frames,
+    #           overlay frames, enrollment frames, Plymouth config
     if [ -d "$REPO_ASSETS" ]; then
         cp "$REPO_ASSETS"/*.png "$THEME_DIR/" 2>/dev/null || true
         cp "$REPO_ASSETS"/*.plymouth "$THEME_DIR/" 2>/dev/null || true
-        local png_count=$(ls "$THEME_DIR"/*.png 2>/dev/null | wc -l)
-        log "  ✅ $png_count pre-generated splash PNGs copied from repo"
-    elif [ -d "/tmp/atlas_repo/brand/splash/generated" ]; then
-        # v8-2-0+ path: generated assets include 4K watermark, throbbers, FBI frames, etc.
-        cp /tmp/atlas_repo/brand/splash/generated/*.png "$THEME_DIR/" 2>/dev/null || true
         # Copy pre-built raw files too (saves ~2min of on-device conversion)
-        cp /tmp/atlas_repo/brand/splash/generated/*.raw "$THEME_DIR/" 2>/dev/null || true
+        cp "$REPO_ASSETS"/*.raw "$THEME_DIR/" 2>/dev/null || true
         local png_count=$(ls "$THEME_DIR"/*.png 2>/dev/null | wc -l)
         local raw_count=$(ls "$THEME_DIR"/*.raw 2>/dev/null | wc -l)
         log "  ✅ $png_count PNGs + $raw_count pre-built RAWs copied from brand/splash/generated/"
     else
-        log "  ⚠️  repo assets/ not found at $REPO_ASSETS — falling back to brand/"
-        # Fallback to old brand/ path if assets/ doesn't exist
-        if [ -d "/tmp/atlas_repo/brand/splash/landscape" ]; then
-            cp /tmp/atlas_repo/brand/splash/landscape/*.png "$THEME_DIR/" 2>/dev/null || true
-            if [ -d "/tmp/atlas_repo/brand/splash/landscape/throbber" ]; then
-                cp /tmp/atlas_repo/brand/splash/landscape/throbber/*.png "$THEME_DIR/" 2>/dev/null || true
-            fi
-            log "  ✅ Plymouth assets copied from brand/ (legacy fallback)"
-        fi
+        log "  ⚠️  Splash assets not found at $REPO_ASSETS"
     fi
 
     # ── Convert framebuffer PNGs to RGB565 raw ────────────────────────────

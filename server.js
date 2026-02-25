@@ -36,7 +36,7 @@ app.get('/api/status', (req, res) => {
 // Scan for available WiFi networks
 app.get('/api/wifi/scan', (req, res) => {
     // Bring wlan0 up first (Pi 5 boots with it DOWN), then scan with iw
-    exec('ip link set wlan0 up 2>/dev/null; sleep 1; iw dev wlan0 scan 2>/dev/null | grep -E "SSID:|signal:" | paste - - 2>/dev/null', { timeout: 20000 }, (error, stdout) => {
+    exec('sudo ip link set wlan0 up 2>/dev/null; sleep 2; sudo iw dev wlan0 scan 2>/dev/null | grep -E "SSID:|signal:" | paste - - 2>/dev/null', { timeout: 25000 }, (error, stdout) => {
         const networks = [];
         if (stdout && stdout.trim()) {
             const lines = stdout.trim().split('\n');
@@ -236,13 +236,13 @@ app.get('/api/system/info', (req, res) => {
 
 // System actions
 app.post('/api/system/reboot', (req, res) => {
-    res.json({ success: true, message: 'Rebooting in 3 seconds...' });
-    setTimeout(() => exec('/usr/sbin/reboot'), 3000);
+    res.json({ success: true, message: 'Rebooting...' });
+    setTimeout(() => exec('sudo /usr/sbin/reboot'), 2000);
 });
 
 app.post('/api/system/shutdown', (req, res) => {
-    res.json({ success: true, message: 'Shutting down in 3 seconds...' });
-    setTimeout(() => exec('/usr/sbin/shutdown -h now'), 3000);
+    res.json({ success: true, message: 'Shutting down...' });
+    setTimeout(() => exec('sudo /usr/sbin/shutdown -h now'), 2000);
 });
 
 app.post('/api/system/resolution', (req, res) => {
@@ -250,24 +250,13 @@ app.post('/api/system/resolution', (req, res) => {
     if (!resolution || !resolution.match(/^\d+x\d+$/)) {
         return res.status(400).json({ error: 'Invalid resolution format' });
     }
-    // Change resolution and recalculate ODS_SCALE
-    const cmd = `
-        DISPLAY=:0 xrandr --output $(DISPLAY=:0 xrandr | grep ' connected' | head -1 | awk '{print $1}') --mode ${resolution} 2>&1
-        SCREEN_W=$(echo ${resolution} | cut -d'x' -f1)
-        if [ "$SCREEN_W" -ge 3000 ]; then
-            export ODS_SCALE=2
-        elif [ "$SCREEN_W" -ge 2000 ]; then
-            export ODS_SCALE=1.5
-        else
-            export ODS_SCALE=1
-        fi
-        echo "SCALE=$ODS_SCALE"
-    `;
+    // Change resolution via xrandr
+    const cmd = `DISPLAY=:0 xrandr --output $(DISPLAY=:0 xrandr | grep ' connected' | head -1 | awk '{print $1}') --mode ${resolution} 2>&1`;
     exec(cmd, { timeout: 10000 }, (error, stdout) => {
-        if (error && !stdout.includes('SCALE=')) {
+        if (error) {
             return res.status(500).json({ error: 'Failed to set resolution: ' + (stdout || error.message) });
         }
-        res.json({ success: true, message: `Resolution set to ${resolution}. Restart services to apply scaling.` });
+        res.json({ success: true, message: `Resolution set to ${resolution}.` });
     });
 });
 
@@ -281,7 +270,7 @@ app.post('/api/system/cache-clear', (req, res) => {
 app.post('/api/system/factory-reset', (req, res) => {
     res.json({ success: true, message: 'Factory reset initiated...' });
     setTimeout(() => {
-        exec('rm -rf /home/signage/.config/chromium && /usr/sbin/reboot');
+        exec('rm -rf /home/signage/.config/chromium && sudo /usr/sbin/reboot');
     }, 2000);
 });
 
@@ -291,7 +280,7 @@ app.get('/api/system/logs', (req, res) => {
     const commands = {
         boot: 'ls -t /var/log/ods/boot_*.log 2>/dev/null | head -1 | xargs cat 2>/dev/null || echo "No boot logs found"',
         health: 'journalctl -u ods-health-monitor --no-pager -n 100 2>/dev/null || echo "No health monitor logs"',
-        services: 'systemctl status ods-kiosk ods-webserver ods-dpms-enforce.timer ods-display-config ods-health-monitor ods-enrollment-boot --no-pager 2>&1',
+        services: 'sudo systemctl status ods-kiosk ods-webserver ods-dpms-enforce.timer ods-display-config ods-health-monitor ods-enrollment-boot --no-pager 2>&1',
         system: 'dmesg | tail -100 2>/dev/null || echo "No dmesg access"',
         esper: 'echo "=== ODS Enrollment ==="; cat /var/log/ods-enrollment.log 2>/dev/null; echo ""; echo "=== Esper CMSE ==="; tail -100 /var/log/esper-cmse.log 2>/dev/null; echo ""; echo "=== Esper Telemetry ==="; tail -50 /var/log/esper-telemetry.log 2>/dev/null'
     };
@@ -304,7 +293,7 @@ app.get('/api/system/logs', (req, res) => {
 // WiFi toggle (on/off)
 app.post('/api/wifi/toggle', (req, res) => {
     const { enabled } = req.body;
-    const cmd = enabled ? 'ip link set wlan0 up 2>&1' : 'ip link set wlan0 down 2>&1';
+    const cmd = enabled ? 'sudo ip link set wlan0 up 2>&1' : 'sudo ip link set wlan0 down 2>&1';
     exec(cmd, { timeout: 5000 }, (error) => {
         if (error) return res.status(500).json({ error: 'Failed to toggle WiFi' });
         res.json({ success: true, enabled, message: `WiFi ${enabled ? 'enabled' : 'disabled'}` });

@@ -78,8 +78,7 @@ Base Armbian .img
 - ✅ Status pill font increase — 1.05rem text, 0.9rem details
 - ✅ Unused pairing.html deleted
 - ✅ Secrets path symlink — `/etc/ods/atlas_secrets.conf` → `/usr/local/etc/`
-- ✅ `brand/splash/generated/` asset path — pre-built 4K PNGs + RGB565 raws
-- ✅ `assets/plymouth/ods/` upgraded to 4K — replaced all HD (1920x1080) assets
+- ✅ `brand/splash/generated/` — single source of truth for all Plymouth assets (4K PNGs + RGB565 raws + .plymouth config)
 - ✅ Enrollment race condition fix — lock file + `Restart=no` override during enrollment
 - ✅ Chromium sandbox — runs as `signage` user (no `--no-sandbox`)
 
