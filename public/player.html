@@ -110,8 +110,15 @@
         }
 
         @keyframes pulse {
-            0%, 100% { filter: drop-shadow(0 8px 32px rgba(245, 132, 42, 0.3)); }
-            50% { filter: drop-shadow(0 8px 48px rgba(245, 132, 42, 0.5)); }
+
+            0%,
+            100% {
+                filter: drop-shadow(0 8px 32px rgba(245, 132, 42, 0.3));
+            }
+
+            50% {
+                filter: drop-shadow(0 8px 48px rgba(245, 132, 42, 0.5));
+            }
         }
 
         h1 {
@@ -143,7 +150,9 @@
             border-bottom: 1px solid #1a1a1a;
         }
 
-        .info-row:last-child { border-bottom: none; }
+        .info-row:last-child {
+            border-bottom: none;
+        }
 
         .info-label {
             color: #666;
@@ -156,8 +165,13 @@
             font-weight: 500;
         }
 
-        .info-value.connected { color: #22c55e; }
-        .info-value.disconnected { color: #ef4444; }
+        .info-value.connected {
+            color: #22c55e;
+        }
+
+        .info-value.disconnected {
+            color: #ef4444;
+        }
 
         .waiting-indicator {
             display: flex;
@@ -178,47 +192,79 @@
         }
 
         @keyframes blink {
-            0%, 100% { opacity: 0.3; }
-            50% { opacity: 1; }
+
+            0%,
+            100% {
+                opacity: 0.3;
+            }
+
+            50% {
+                opacity: 1;
+            }
         }
 
         /* ==========================================
-           STATUS OVERLAY (sync/offline indicator)
+           OFFLINE BORDER INDICATOR
+           Thin border on all edges, escalating color
+           by offline duration. Uses inset box-shadow
+           for zero layout impact.
            ========================================== */
-        #status-overlay {
+        #offline-border {
             position: fixed;
-            bottom: 16px;
-            right: 16px;
-            z-index: 100;
-            display: none;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 200;
+            pointer-events: none;
+            box-shadow: none;
+            transition: box-shadow 0.6s ease;
         }
 
-        .status-pill {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            padding: 6px 12px;
-            border-radius: 999px;
-            font-size: 11px;
-            font-weight: 500;
-            backdrop-filter: blur(8px);
+        /* Tier 1: Yellow (0-30 min offline) */
+        #offline-border.tier-warning {
+            box-shadow: inset 0 0 0 6px #eab308;
         }
 
-        .status-pill.syncing {
-            background: rgba(59, 130, 246, 0.8);
-            color: white;
+        /* Tier 2: Orange (30-60 min offline) */
+        #offline-border.tier-alert {
+            box-shadow: inset 0 0 0 6px #f97316;
         }
 
-        .status-pill.offline {
-            background: rgba(239, 68, 68, 0.8);
-            color: white;
+        /* Tier 3: Red (60-120 min offline) */
+        #offline-border.tier-critical {
+            box-shadow: inset 0 0 0 6px #ef4444;
         }
 
-        .status-dot {
-            width: 6px;
-            height: 6px;
+        /* Tier 4: Flashing Red (120+ min offline) */
+        #offline-border.tier-emergency {
+            box-shadow: inset 0 0 0 6px #ef4444;
+            animation: border-flash 1s ease-in-out infinite;
+        }
+
+        @keyframes border-flash {
+
+            0%,
+            100% {
+                box-shadow: inset 0 0 0 6px #ef4444;
+            }
+
+            50% {
+                box-shadow: inset 0 0 0 6px transparent;
+            }
+        }
+
+        /* Syncing indicator — subtle blue pulse in bottom-right */
+        #sync-indicator {
+            position: fixed;
+            bottom: 12px;
+            right: 12px;
+            z-index: 201;
+            width: 10px;
+            height: 10px;
             border-radius: 50%;
-            background: currentColor;
+            background: #3b82f6;
+            display: none;
             animation: blink 1s ease-in-out infinite;
         }
     </style>
@@ -271,10 +317,11 @@
         </div>
     </div>
 
-    <!-- Status Overlay -->
-    <div id="status-overlay">
-        <div class="status-pill" id="status-pill"></div>
-    </div>
+    <!-- Offline Border Indicator -->
+    <div id="offline-border"></div>
+
+    <!-- Sync Indicator (small blue dot) -->
+    <div id="sync-indicator"></div>
 
     <script>
         // ========================================
@@ -415,7 +462,7 @@
                 const video = nextSlide.querySelector('video');
                 if (video) {
                     video.currentTime = 0;
-                    video.play().catch(() => {});
+                    video.play().catch(() => { });
 
                     // Use video's natural duration if available
                     video.onloadedmetadata = () => {
@@ -439,8 +486,53 @@
         }
 
         // ========================================
-        // SYNC STATUS
+        // OFFLINE BORDER INDICATOR
+        // Tiered border system:
+        //   0-30 min  = yellow  (warning)
+        //   30-60 min = orange  (alert)
+        //   60-120 min = red    (critical)
+        //   120+ min  = flashing red (emergency)
         // ========================================
+
+        let offlineSince = null;   // Timestamp when we first detected offline
+        let wasOnline = true;      // Previous state for edge detection
+
+        const OFFLINE_TIERS = [
+            { maxMinutes: 30, className: 'tier-warning' },  // Yellow
+            { maxMinutes: 60, className: 'tier-alert' },  // Orange
+            { maxMinutes: 120, className: 'tier-critical' },  // Red
+            { maxMinutes: Infinity, className: 'tier-emergency' }  // Flashing red
+        ];
+
+        function getOfflineTier(offlineMinutes) {
+            return OFFLINE_TIERS.find(t => offlineMinutes < t.maxMinutes) || OFFLINE_TIERS[OFFLINE_TIERS.length - 1];
+        }
+
+        function updateOfflineBorder(isConnected) {
+            const borderEl = document.getElementById('offline-border');
+
+            if (isConnected) {
+                // Online — clear border and reset timer
+                borderEl.className = '';
+                offlineSince = null;
+                wasOnline = true;
+                return;
+            }
+
+            // Offline — start tracking if this is a new disconnect
+            if (wasOnline) {
+                offlineSince = Date.now();
+                wasOnline = false;
+            }
+
+            // Calculate offline duration
+            const offlineMs = Date.now() - (offlineSince || Date.now());
+            const offlineMinutes = offlineMs / (1000 * 60);
+
+            // Apply the appropriate tier
+            const tier = getOfflineTier(offlineMinutes);
+            borderEl.className = tier.className;
+        }
 
         async function updateSyncStatus() {
             try {
@@ -448,9 +540,9 @@
                 const status = await res.json();
 
                 const cloudEl = document.getElementById('cloud-status');
-                const overlayEl = document.getElementById('status-overlay');
-                const pillEl = document.getElementById('status-pill');
+                const syncDot = document.getElementById('sync-indicator');
 
+                // Update waiting screen cloud status text
                 if (status.isConnected) {
                     if (cloudEl) {
                         cloudEl.textContent = 'Connected';
@@ -463,23 +555,14 @@
                     }
                 }
 
-                // Show status overlay during slideshow
-                if (isPlaying) {
-                    if (status.syncInProgress) {
-                        overlayEl.style.display = 'block';
-                        pillEl.className = 'status-pill syncing';
-                        pillEl.innerHTML = '<span class="status-dot"></span> Syncing...';
-                    } else if (!status.isConnected) {
-                        overlayEl.style.display = 'block';
-                        pillEl.className = 'status-pill offline';
-                        pillEl.innerHTML = '<span class="status-dot"></span> Offline';
-                        // Auto-hide after 5 seconds
-                        setTimeout(() => { overlayEl.style.display = 'none'; }, 5000);
-                    } else {
-                        overlayEl.style.display = 'none';
-                    }
+                // Update offline border (active on both waiting + playing screens)
+                updateOfflineBorder(status.isConnected);
+
+                // Show sync dot during active sync
+                if (syncDot) {
+                    syncDot.style.display = status.syncInProgress ? 'block' : 'none';
                 }
-            } catch { /* ignore */ }
+            } catch { /* ignore — probably offline */ }
         }
 
         // ========================================
@@ -510,7 +593,7 @@
                         }
                     }
                 })
-                .catch(() => {});
+                .catch(() => { });
         }
 
         // ========================================
@@ -532,7 +615,7 @@
         updateSyncStatus();
 
         // Signal page is ready (for boot transition)
-        fetch('/api/signal-ready', { method: 'POST' }).catch(() => {});
+        fetch('/api/signal-ready', { method: 'POST' }).catch(() => { });
 
         // ========================================
         // FOUC GUARD
