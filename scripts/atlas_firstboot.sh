@@ -181,6 +181,14 @@ deploy_atlas() {
     cp -r atlas_repo/public /home/signage/ODS/
     cp atlas_repo/server.js /home/signage/ODS/
     cp atlas_repo/package.json /home/signage/ODS/
+    cp atlas_repo/package-lock.json /home/signage/ODS/ 2>/dev/null || true
+
+    # Copy player modules (cloud-sync, cache-manager)
+    if [ -d "atlas_repo/player" ]; then
+        mkdir -p /home/signage/ODS/player
+        cp -r atlas_repo/player/* /home/signage/ODS/player/
+        log "  ✅ player/ modules deployed (cloud-sync, cache-manager)"
+    fi
 
     # Copy bin scripts (health monitor, etc.)
     if [ -d "atlas_repo/bin" ]; then
