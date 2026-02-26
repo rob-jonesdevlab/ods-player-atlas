@@ -16,19 +16,76 @@
             background: #0a0a0a;
             color: #ffffff;
             font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            overflow: hidden;
+            -webkit-user-select: none;
+            user-select: none;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        /* ==========================================
+           CONTENT SLIDESHOW (active when playing)
+           ========================================== */
+        #slideshow {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 10;
+            display: none;
+        }
+
+        .slide {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            transition: opacity 0.8s ease-in-out;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #000;
+        }
+
+        .slide.active {
+            opacity: 1;
+        }
+
+        .slide img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+
+        .slide video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .slide iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
+        /* ==========================================
+           WAITING SCREEN (shown when no content)
+           ========================================== */
+        #waiting {
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
             min-height: 100vh;
-            overflow: hidden;
-            -webkit-user-select: none;
-            user-select: none;
             opacity: 0;
             transition: opacity 0.3s ease;
         }
 
-        body.ready {
+        #waiting.ready {
             opacity: 1;
         }
 
@@ -53,15 +110,8 @@
         }
 
         @keyframes pulse {
-
-            0%,
-            100% {
-                filter: drop-shadow(0 8px 32px rgba(245, 132, 42, 0.3));
-            }
-
-            50% {
-                filter: drop-shadow(0 8px 48px rgba(245, 132, 42, 0.5));
-            }
+            0%, 100% { filter: drop-shadow(0 8px 32px rgba(245, 132, 42, 0.3)); }
+            50% { filter: drop-shadow(0 8px 48px rgba(245, 132, 42, 0.5)); }
         }
 
         h1 {
@@ -93,9 +143,7 @@
             border-bottom: 1px solid #1a1a1a;
         }
 
-        .info-row:last-child {
-            border-bottom: none;
-        }
+        .info-row:last-child { border-bottom: none; }
 
         .info-label {
             color: #666;
@@ -108,15 +156,10 @@
             font-weight: 500;
         }
 
-        .info-value.connected {
-            color: #22c55e;
-        }
+        .info-value.connected { color: #22c55e; }
+        .info-value.disconnected { color: #ef4444; }
 
-        .info-value.disconnected {
-            color: #ef4444;
-        }
-
-        .waiting {
+        .waiting-indicator {
             display: flex;
             align-items: center;
             justify-content: center;
@@ -126,7 +169,7 @@
             font-size: 13px;
         }
 
-        .waiting .dot {
+        .waiting-indicator .dot {
             width: 8px;
             height: 8px;
             background: #f59e0b;
@@ -135,102 +178,366 @@
         }
 
         @keyframes blink {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 1; }
+        }
 
-            0%,
-            100% {
-                opacity: 0.3;
-            }
+        /* ==========================================
+           STATUS OVERLAY (sync/offline indicator)
+           ========================================== */
+        #status-overlay {
+            position: fixed;
+            bottom: 16px;
+            right: 16px;
+            z-index: 100;
+            display: none;
+        }
 
-            50% {
-                opacity: 1;
-            }
+        .status-pill {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 500;
+            backdrop-filter: blur(8px);
+        }
+
+        .status-pill.syncing {
+            background: rgba(59, 130, 246, 0.8);
+            color: white;
+        }
+
+        .status-pill.offline {
+            background: rgba(239, 68, 68, 0.8);
+            color: white;
+        }
+
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: currentColor;
+            animation: blink 1s ease-in-out infinite;
         }
     </style>
 </head>
 
 <body>
-    <div class="container">
-        <!-- ODS Logo -->
-        <div class="logo">
-            <img src="/resources/ods-player-logo.png" alt="ODS" />
-        </div>
+    <!-- Content Slideshow -->
+    <div id="slideshow"></div>
 
-        <h1>Player Ready</h1>
-        <p class="subtitle">Otter Digital Signage</p>
+    <!-- Waiting Screen (no content) -->
+    <div id="waiting">
+        <div class="container">
+            <div class="logo">
+                <img src="/resources/ods-player-logo.png" alt="ODS" />
+            </div>
+            <h1>Player Ready</h1>
+            <p class="subtitle">Otter Digital Signage</p>
 
-        <!-- Device Info -->
-        <div class="info-table">
-            <div class="info-row">
-                <span class="info-label">Account</span>
-                <span class="info-value" id="account">Loading...</span>
+            <div class="info-table">
+                <div class="info-row">
+                    <span class="info-label">Account</span>
+                    <span class="info-value" id="account">Loading...</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Device</span>
+                    <span class="info-value" id="device">Loading...</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Hostname</span>
+                    <span class="info-value" id="hostname">Loading...</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">IP Address</span>
+                    <span class="info-value" id="ip">Loading...</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Network</span>
+                    <span class="info-value" id="network">Checking...</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Cloud</span>
+                    <span class="info-value" id="cloud-status">Connecting...</span>
+                </div>
             </div>
-            <div class="info-row">
-                <span class="info-label">Device</span>
-                <span class="info-value" id="device">Loading...</span>
-            </div>
-            <div class="info-row">
-                <span class="info-label">Hostname</span>
-                <span class="info-value" id="hostname">Loading...</span>
-            </div>
-            <div class="info-row">
-                <span class="info-label">IP Address</span>
-                <span class="info-value" id="ip">Loading...</span>
-            </div>
-            <div class="info-row">
-                <span class="info-label">Network</span>
-                <span class="info-value" id="network">Checking...</span>
+
+            <div class="waiting-indicator">
+                <span class="dot"></span>
+                <span>Waiting for content from ODS Cloud</span>
             </div>
         </div>
+    </div>
 
-        <!-- Waiting Indicator -->
-        <div class="waiting">
-            <span class="dot"></span>
-            <span>Waiting for content from ODS Cloud</span>
-        </div>
+    <!-- Status Overlay -->
+    <div id="status-overlay">
+        <div class="status-pill" id="status-pill"></div>
     </div>
 
     <script>
         // ========================================
+        // CONTENT SLIDESHOW ENGINE
+        // ========================================
+
+        let currentSlideIndex = -1;
+        let slides = [];
+        let slideTimer = null;
+        let currentConfigHash = null;
+        let isPlaying = false;
+
+        /**
+         * Fetch content from local player server
+         */
+        async function fetchContent() {
+            try {
+                const res = await fetch('/api/player/content');
+                const data = await res.json();
+
+                if (data.hasContent && data.playlist && data.playlist.assets.length > 0) {
+                    // Check if content changed
+                    if (data.playlist.config_hash !== currentConfigHash) {
+                        currentConfigHash = data.playlist.config_hash;
+                        loadSlideshow(data.playlist);
+                    }
+                } else {
+                    // No content — show waiting screen
+                    if (isPlaying) {
+                        stopSlideshow();
+                    }
+                }
+            } catch (err) {
+                console.error('[Player] Content fetch error:', err.message);
+            }
+        }
+
+        /**
+         * Load slideshow from playlist data
+         */
+        function loadSlideshow(playlist) {
+            const slideshowEl = document.getElementById('slideshow');
+            slideshowEl.innerHTML = '';
+            slides = [];
+            currentSlideIndex = -1;
+
+            playlist.assets.forEach((asset, index) => {
+                const slide = document.createElement('div');
+                slide.className = 'slide';
+                slide.dataset.duration = asset.duration * 1000;
+
+                if (asset.type === 'image' || asset.type === 'photo') {
+                    const img = document.createElement('img');
+                    // Use local cache path served by Express static
+                    const ext = asset.filename ? asset.filename.split('.').pop() : 'jpg';
+                    img.src = `/cache/${asset.id}.${ext}`;
+                    img.alt = asset.filename || 'Content';
+                    img.draggable = false;
+                    slide.appendChild(img);
+
+                } else if (asset.type === 'video') {
+                    const video = document.createElement('video');
+                    const ext = asset.filename ? asset.filename.split('.').pop() : 'mp4';
+                    video.src = `/cache/${asset.id}.${ext}`;
+                    video.autoplay = false;
+                    video.muted = true;
+                    video.playsInline = true;
+                    video.loop = false;
+                    slide.appendChild(video);
+                    slide.dataset.isVideo = 'true';
+
+                } else if (asset.type === 'url' || asset.type === 'webpage') {
+                    const iframe = document.createElement('iframe');
+                    iframe.src = asset.filename; // URL content uses filename as the URL
+                    iframe.sandbox = 'allow-scripts allow-same-origin';
+                    slide.appendChild(iframe);
+                }
+
+                slideshowEl.appendChild(slide);
+                slides.push(slide);
+            });
+
+            if (slides.length > 0) {
+                startSlideshow();
+            }
+        }
+
+        /**
+         * Start the slideshow
+         */
+        function startSlideshow() {
+            isPlaying = true;
+            document.getElementById('slideshow').style.display = 'block';
+            document.getElementById('waiting').style.display = 'none';
+            advanceSlide();
+        }
+
+        /**
+         * Stop the slideshow and show waiting screen
+         */
+        function stopSlideshow() {
+            isPlaying = false;
+            if (slideTimer) clearTimeout(slideTimer);
+            document.getElementById('slideshow').style.display = 'none';
+            document.getElementById('waiting').style.display = 'flex';
+            currentConfigHash = null;
+        }
+
+        /**
+         * Advance to the next slide
+         */
+        function advanceSlide() {
+            if (slides.length === 0) return;
+
+            // Deactivate current slide
+            if (currentSlideIndex >= 0 && slides[currentSlideIndex]) {
+                const currentSlide = slides[currentSlideIndex];
+                currentSlide.classList.remove('active');
+
+                // Pause video if playing
+                const video = currentSlide.querySelector('video');
+                if (video) {
+                    video.pause();
+                    video.currentTime = 0;
+                }
+            }
+
+            // Advance index (loop around)
+            currentSlideIndex = (currentSlideIndex + 1) % slides.length;
+            const nextSlide = slides[currentSlideIndex];
+            nextSlide.classList.add('active');
+
+            // Get duration for this slide
+            let duration = parseInt(nextSlide.dataset.duration) || 10000;
+
+            // Handle video: use video duration instead of config duration
+            if (nextSlide.dataset.isVideo === 'true') {
+                const video = nextSlide.querySelector('video');
+                if (video) {
+                    video.currentTime = 0;
+                    video.play().catch(() => {});
+
+                    // Use video's natural duration if available
+                    video.onloadedmetadata = () => {
+                        if (video.duration && isFinite(video.duration)) {
+                            // Clear the timer and set one based on actual video length
+                            if (slideTimer) clearTimeout(slideTimer);
+                            slideTimer = setTimeout(advanceSlide, video.duration * 1000 + 500);
+                        }
+                    };
+
+                    // Fallback: advance when video ends
+                    video.onended = () => {
+                        if (slideTimer) clearTimeout(slideTimer);
+                        advanceSlide();
+                    };
+                }
+            }
+
+            // Set timer for next slide
+            slideTimer = setTimeout(advanceSlide, duration);
+        }
+
+        // ========================================
+        // SYNC STATUS
+        // ========================================
+
+        async function updateSyncStatus() {
+            try {
+                const res = await fetch('/api/player/sync-status');
+                const status = await res.json();
+
+                const cloudEl = document.getElementById('cloud-status');
+                const overlayEl = document.getElementById('status-overlay');
+                const pillEl = document.getElementById('status-pill');
+
+                if (status.isConnected) {
+                    if (cloudEl) {
+                        cloudEl.textContent = 'Connected';
+                        cloudEl.className = 'info-value connected';
+                    }
+                } else {
+                    if (cloudEl) {
+                        cloudEl.textContent = 'Disconnected';
+                        cloudEl.className = 'info-value disconnected';
+                    }
+                }
+
+                // Show status overlay during slideshow
+                if (isPlaying) {
+                    if (status.syncInProgress) {
+                        overlayEl.style.display = 'block';
+                        pillEl.className = 'status-pill syncing';
+                        pillEl.innerHTML = '<span class="status-dot"></span> Syncing...';
+                    } else if (!status.isConnected) {
+                        overlayEl.style.display = 'block';
+                        pillEl.className = 'status-pill offline';
+                        pillEl.innerHTML = '<span class="status-dot"></span> Offline';
+                        // Auto-hide after 5 seconds
+                        setTimeout(() => { overlayEl.style.display = 'none'; }, 5000);
+                    } else {
+                        overlayEl.style.display = 'none';
+                    }
+                }
+            } catch { /* ignore */ }
+        }
+
+        // ========================================
         // DEVICE INFO POLLING
         // ========================================
+
         function updateDeviceInfo() {
             fetch('/api/device/info')
                 .then(r => r.json())
                 .then(data => {
-                    document.getElementById('account').textContent = data.account_name || 'Not assigned';
-                    document.getElementById('device').textContent = data.device_name || 'Not assigned';
-                    document.getElementById('hostname').textContent = data.three_word_name || '--';
-                    document.getElementById('ip').textContent = data.ip_address || '--';
+                    const el = id => document.getElementById(id);
+                    if (el('account')) el('account').textContent = data.account_name || 'Not assigned';
+                    if (el('device')) el('device').textContent = data.device_name || 'Not assigned';
+                    if (el('hostname')) el('hostname').textContent = data.three_word_name || '--';
+                    if (el('ip')) el('ip').textContent = data.ip_address || '--';
 
-                    // Network with color coding
-                    const networkEl = document.getElementById('network');
-                    if (data.connection_type === 'Ethernet') {
-                        networkEl.textContent = 'Ethernet';
-                        networkEl.className = 'info-value connected';
-                    } else if (data.connection_type === 'WiFi') {
-                        networkEl.textContent = data.ssid ? 'WiFi (' + data.ssid + ')' : 'WiFi';
-                        networkEl.className = 'info-value connected';
-                    } else {
-                        networkEl.textContent = 'Disconnected';
-                        networkEl.className = 'info-value disconnected';
+                    const networkEl = el('network');
+                    if (networkEl) {
+                        if (data.connection_type === 'Ethernet') {
+                            networkEl.textContent = 'Ethernet';
+                            networkEl.className = 'info-value connected';
+                        } else if (data.connection_type === 'WiFi') {
+                            networkEl.textContent = data.ssid ? 'WiFi (' + data.ssid + ')' : 'WiFi';
+                            networkEl.className = 'info-value connected';
+                        } else {
+                            networkEl.textContent = 'Disconnected';
+                            networkEl.className = 'info-value disconnected';
+                        }
                     }
                 })
-                .catch(() => {
-                    document.getElementById('ip').textContent = '--';
-                });
+                .catch(() => {});
         }
 
-        // Initial fetch + 60-second polling
-        updateDeviceInfo();
+        // ========================================
+        // POLLING LOOPS
+        // ========================================
+
+        // Content check: every 10 seconds (lightweight — just checks cache)
+        setInterval(fetchContent, 10000);
+
+        // Sync status: every 15 seconds
+        setInterval(updateSyncStatus, 15000);
+
+        // Device info: every 60 seconds
         setInterval(updateDeviceInfo, 60000);
 
+        // Initial fetches
+        fetchContent();
+        updateDeviceInfo();
+        updateSyncStatus();
+
         // Signal page is ready (for boot transition)
-        fetch('/api/signal-ready', { method: 'POST' }).catch(() => { });
+        fetch('/api/signal-ready', { method: 'POST' }).catch(() => {});
 
         // ========================================
         // FOUC GUARD
         // ========================================
-        function revealPage() { document.body.classList.add('ready'); }
+        function revealPage() { document.getElementById('waiting').classList.add('ready'); }
         window.addEventListener('load', revealPage);
         setTimeout(revealPage, 6000);
 

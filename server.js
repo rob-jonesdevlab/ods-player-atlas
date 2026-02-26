@@ -528,65 +528,52 @@ app.post('/api/cache/clean', (req, res) => {
 });
 
 // ========================================
-// HEARTBEAT SYNC LOOP
+// CONTENT DELIVERY APIs (for player.html renderer)
 // ========================================
 
-let syncInterval = null;
+const cloudSync = require('./player/cloud-sync');
 
-function startSyncLoop() {
-    const ENROLLMENT_FILE = '/var/lib/ods/enrollment.flag';
-    if (!fs.existsSync(ENROLLMENT_FILE)) {
-        console.log('[Cache] Not enrolled — sync loop disabled');
-        return;
+// GET /api/player/content — Returns current playlist for the renderer
+app.get('/api/player/content', (req, res) => {
+    const content = cloudSync.getContentForRenderer();
+    if (!content) {
+        return res.json({ hasContent: false, playlist: null });
     }
+    res.json({ hasContent: true, playlist: content });
+});
 
+// GET /api/player/sync-status — Returns sync health for system config panel
+app.get('/api/player/sync-status', (req, res) => {
+    res.json(cloudSync.getStatus());
+});
+
+// POST /api/player/sync-now — Manual sync trigger (from system config)
+app.post('/api/player/sync-now', async (req, res) => {
     try {
-        const enrollment = JSON.parse(fs.readFileSync(ENROLLMENT_FILE, 'utf8'));
-        if (!enrollment.cloud_url || !enrollment.player_id || !enrollment.api_token) {
-            console.log('[Cache] Incomplete enrollment — sync loop disabled');
-            return;
-        }
-
-        // Initialize cache directories
-        cacheManager.initCacheDirs();
-
-        // Run initial sync
-        console.log('[Cache] Running initial content sync...');
-        cacheManager.syncContent(enrollment.cloud_url, enrollment.player_id, enrollment.api_token)
-            .then(result => console.log(`[Cache] Initial sync: ${JSON.stringify(result)}`))
-            .catch(err => console.error('[Cache] Initial sync failed:', err.message));
-
-        // Start periodic sync (every 60 seconds)
-        const intervalSeconds = 60;
-        syncInterval = setInterval(async () => {
-            try {
-                const result = await cacheManager.syncContent(
-                    enrollment.cloud_url,
-                    enrollment.player_id,
-                    enrollment.api_token
-                );
-                if (result.downloaded > 0 || result.removed > 0) {
-                    console.log(`[Cache] Sync update: ${JSON.stringify(result)}`);
-                }
-            } catch (err) {
-                console.error('[Cache] Sync error:', err.message);
-            }
-        }, intervalSeconds * 1000);
-
-        console.log(`[Cache] Sync loop started (every ${intervalSeconds}s)`);
-
-        // Clean stale cache daily
-        setInterval(() => cacheManager.cleanStaleCache(7), 24 * 60 * 60 * 1000);
-
+        await cloudSync.doSync();
+        res.json({ success: true, status: cloudSync.getStatus() });
     } catch (err) {
-        console.error('[Cache] Failed to start sync loop:', err.message);
+        res.status(500).json({ error: err.message });
     }
-}
+});
+
+// Serve cached content files directly (for renderer <img>/<video> tags)
+app.use('/cache', express.static(cacheManager.GOOD_CACHE_DIR));
+
 
 // ========================================
 // START SERVER
 // ========================================
 app.listen(PORT, () => {
-    console.log(`[SETUP] ODS Player OS v7 server running on port ${PORT}`);
-    startSyncLoop();
+    console.log(`[SETUP] ODS Player OS Atlas server running on port ${PORT}`);
+
+    // Start cloud sync (WebSocket + config polling)
+    cloudSync.start({
+        onContentReady: () => {
+            console.log('[CloudSync] 🎬 Content ready — renderer will pick up on next poll');
+        }
+    });
+
+    // Clean stale cache daily
+    setInterval(() => cacheManager.cleanStaleCache(7), 24 * 60 * 60 * 1000);
 });
