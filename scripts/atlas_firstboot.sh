@@ -8,7 +8,13 @@
 # Runs once on first boot via atlas-firstboot.service (systemd oneshot)
 # =============================================================================
 
-set -e
+# DO NOT use set -e in provisioning scripts — it causes silent aborts when
+# any command returns non-zero (dpkg locks, systemctl disable of non-existent
+# services, optional config steps, etc.). Instead we use explicit checks.
+set -o pipefail
+
+# Trap errors and log them instead of silently dying
+trap 'echo "[$(date "+%H:%M:%S")] ⚠️ WARNING: Command failed at line $LINENO (exit code $?)" | tee -a /tmp/atlas_firstboot.log > /dev/tty1 2>/dev/null' ERR
 
 # ─── Configuration ──────────────────────────────────────────────────────────
 # Secrets are loaded from a separate config file injected into the image
