@@ -129,11 +129,41 @@ install_packages() {
 
     export DEBIAN_FRONTEND=noninteractive
 
-    log "  → apt update..."
-    apt-get update -y 2>&1 | tee -a "$LOG_FILE"
+    # apt update with retry (transient DNS failures common on fresh Pi)
+    log "  → apt update (with retry)..."
+    local apt_tries=0
+    while [ $apt_tries -lt 3 ]; do
+        if apt-get update -y 2>&1 | tee -a "$LOG_FILE"; then
+            log "  ✅ apt update succeeded"
+            break
+        fi
+        apt_tries=$((apt_tries + 1))
+        log "  ⚠️  apt update failed (attempt $apt_tries/3) — retrying in 10s..."
+        sleep 10
+    done
 
-    log "  → Installing core packages..."
-    apt-get install -y \
+    # ── Batch 1: Critical infrastructure (must succeed for deploy_atlas) ──
+    log "  → Batch 1: Critical infrastructure (git, node, npm, curl)..."
+    apt-get install -y --fix-missing \
+        git \
+        nodejs \
+        npm \
+        curl \
+        wget \
+        jq \
+        bc \
+        dnsutils \
+        2>&1 | tee -a "$LOG_FILE"
+
+    if command -v git &>/dev/null && command -v node &>/dev/null; then
+        log "  ✅ Batch 1 complete (git, node, npm installed)"
+    else
+        log "  ❌ Batch 1 FAILED — git/node not installed. deploy_atlas will fail."
+    fi
+
+    # ── Batch 2: Display stack (chromium, xorg, openbox) ──
+    log "  → Batch 2: Display stack (chromium, xorg, openbox)..."
+    apt-get install -y --fix-missing \
         chromium \
         xserver-xorg \
         x11-xserver-utils \
@@ -141,21 +171,36 @@ install_packages() {
         xdotool \
         xterm \
         gnome-themes-extra \
-        jq \
-        imagemagick \
         unclutter \
+        2>&1 | tee -a "$LOG_FILE" || \
+        log "  ⚠️  Batch 2 partial failure (chromium mirror may be stale)"
+
+    # ── Batch 3: Build tools & boot UI ──
+    log "  → Batch 3: Build tools & boot UI..."
+    apt-get install -y --fix-missing \
+        imagemagick \
         plymouth \
         plymouth-themes \
-        nodejs \
-        npm \
-        git \
-        curl \
-        wget \
-        bc \
-        dnsutils \
-        2>&1 | tee -a "$LOG_FILE"
+        2>&1 | tee -a "$LOG_FILE" || \
+        log "  ⚠️  Batch 3 partial failure"
 
-    log "  ✅ Packages installed"
+    # ── Verify critical packages ──
+    log "  → Verifying critical packages..."
+    local all_ok=true
+    for pkg in git node npm; do
+        if command -v "$pkg" &>/dev/null; then
+            log "    ✅ $pkg: $(command -v $pkg)"
+        else
+            log "    ❌ $pkg: NOT FOUND"
+            all_ok=false
+        fi
+    done
+
+    if [ "$all_ok" = true ]; then
+        log "  ✅ All critical packages installed"
+    else
+        log "  ⚠️  Some critical packages missing — deploy_atlas may fail"
+    fi
 }
 
 # ─── Step 3: Create Users ──────────────────────────────────────────────────
