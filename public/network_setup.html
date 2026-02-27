@@ -5,12 +5,12 @@
     <meta charset="utf-8" />
     <meta content="width=device-width, initial-scale=1.0" name="viewport" />
     <title>ODS Network Setup</title>
-    <!-- Fonts -->
+    <!-- Fonts (may not load in AP mode — fallback font-family covers it) -->
     <link href="https://fonts.googleapis.com" rel="preconnect" />
     <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
         rel="stylesheet" />
-    <!-- Tailwind CSS -->
+    <!-- Tailwind CSS (may not load in AP mode — CSS fallbacks below) -->
     <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
     <script id="tailwind-config">
         tailwind.config = {
@@ -69,7 +69,13 @@
                 inset 0 1px 0 rgba(255, 255, 255, 0.7);
         }
 
-        /* ── Tailwind CSS Fallbacks (AP mode has no internet → CDN won't load) ── */
+        /* ── CSS Fallbacks (AP mode has no internet → Tailwind CDN won't load) ── */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
         body {
             display: flex;
             flex-direction: column;
@@ -80,18 +86,7 @@
             color: #1e293b;
         }
 
-        .min-h-screen {
-            min-height: 100vh;
-        }
-
-        .relative {
-            position: relative;
-        }
-
-        .absolute {
-            position: absolute;
-        }
-
+        /* Layout */
         .flex {
             display: flex;
         }
@@ -104,12 +99,12 @@
             flex-direction: column;
         }
 
-        .items-center {
-            align-items: center;
+        .flex-shrink-0 {
+            flex-shrink: 0;
         }
 
-        .items-start {
-            align-items: flex-start;
+        .items-center {
+            align-items: center;
         }
 
         .justify-center {
@@ -122,6 +117,14 @@
 
         .w-auto {
             width: auto;
+        }
+
+        .w-10 {
+            width: 2.5rem;
+        }
+
+        .h-10 {
+            height: 2.5rem;
         }
 
         .text-center {
@@ -138,6 +141,14 @@
 
         .inline-flex {
             display: inline-flex;
+        }
+
+        .relative {
+            position: relative;
+        }
+
+        .absolute {
+            position: absolute;
         }
 
         /* Spacing */
@@ -172,54 +183,46 @@
             padding: 0.75rem;
         }
 
-        .p-6 {
-            padding: 1.5rem;
+        .p-10 {
+            padding: 2.5rem;
         }
 
-        .py-3\.5,
-        .py-3_5 {
-            padding-top: 0.875rem;
-            padding-bottom: 0.875rem;
+        .mb-2 {
+            margin-bottom: 0.5rem;
         }
 
-        .mb-1 {
-            margin-bottom: 0.25rem;
-        }
-
-        .mb-3 {
-            margin-bottom: 0.75rem;
-        }
-
-        .mb-4 {
-            margin-bottom: 1rem;
-        }
-
-        .gap-1 {
-            gap: 0.25rem;
+        .mb-10 {
+            margin-bottom: 2.5rem;
         }
 
         .gap-3 {
             gap: 0.75rem;
         }
 
-        .gap-6 {
-            gap: 1.5rem;
+        .gap-4 {
+            gap: 1rem;
+        }
+
+        .space-y-4>*+* {
+            margin-top: 1rem;
         }
 
         /* Typography */
         .text-sm {
             font-size: 0.875rem;
-            line-height: 1.25rem;
+        }
+
+        .text-base {
+            font-size: 1rem;
+        }
+
+        .text-lg {
+            font-size: 1.125rem;
         }
 
         .text-xl {
             font-size: 1.25rem;
             line-height: 1.75rem;
-        }
-
-        .text-2xl {
-            font-size: 1.5rem;
-            line-height: 2rem;
         }
 
         .text-3xl {
@@ -241,6 +244,14 @@
 
         .tracking-wide {
             letter-spacing: 0.025em;
+        }
+
+        .uppercase {
+            text-transform: uppercase;
+        }
+
+        .leading-snug {
+            line-height: 1.375;
         }
 
         /* Visual */
@@ -276,6 +287,35 @@
             color: #111827;
         }
 
+        .text-primary {
+            color: #3c83f6;
+        }
+
+        /* Step circles — match player_link exactly */
+        .step-circle {
+            flex-shrink: 0;
+            width: 2.5rem;
+            height: 2.5rem;
+            border-radius: 9999px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 1rem;
+        }
+
+        .step-circle-active {
+            background: rgba(60, 131, 246, 0.2);
+            color: #3c83f6;
+            border: 1px solid rgba(60, 131, 246, 0.3);
+        }
+
+        .step-circle-inactive {
+            background: #f3f4f6;
+            color: #1a1a2e;
+            border: 1px solid #e5e7eb;
+        }
+
         /* Ping animation (status dot) */
         .animate-ping {
             animation: ping 1s cubic-bezier(0, 0, 0.2, 1) infinite;
@@ -306,55 +346,65 @@
             opacity: 0.75;
         }
 
-        .h-3\.5,
-        .h-3_5 {
+        .h-3\.5 {
             height: 0.875rem;
         }
 
-        .w-3\.5,
-        .w-3_5 {
+        .w-3\.5 {
             width: 0.875rem;
+        }
+
+        @media (min-width: 768px) {
+            .md\:p-14 {
+                padding: 3.5rem;
+            }
         }
     </style>
 </head>
 
 <body class="bg-background-light text-slate-900 font-display min-h-screen overflow-hidden flex flex-col relative"
     style="background: url('/resources/designs/ODS_Background.png') center/cover no-repeat fixed;">
-    <!-- Header Section - Removed subtitle -->
+    <!-- Header Section -->
     <header class="w-full pt-32 pb-6 px-10 flex flex-col items-center justify-center z-10">
     </header>
 
     <!-- Main Content — pb-44 ensures card stays above the status pill at 90% -->
     <main class="flex-1 flex flex-col items-center justify-center w-full px-4 pb-44 z-10">
-        <div class="glass-card rounded-2xl p-6 md:p-8 flex flex-col items-center shadow-2xl w-auto">
-            <!-- Title -->
-            <h2 class="text-3xl font-bold mb-1 whitespace-nowrap" style="color: #1a1a2e;">Network Setup</h2>
-            <p class="mb-4 text-center text-xl font-semibold whitespace-nowrap" style="color: #1a1a2e;">
-                Scan QR code to configure WiFi
-            </p>
+        <div class="glass-card rounded-2xl p-10 md:p-14 flex flex-col items-center shadow-2xl w-auto">
+            <!-- QR Code Section -->
+            <div id="qrcode" class="bg-white p-3 rounded-xl shadow-lg mb-10"></div>
 
-            <!-- QR Code Section — minimal padding so QR fills the box -->
-            <div id="qrcode" class="bg-white p-3 rounded-xl shadow-lg mb-4"></div>
+            <!-- Device Name / SSID -->
+            <div class="flex flex-col items-center mb-10">
+                <span class="text-lg font-semibold mb-2 tracking-wide uppercase whitespace-nowrap"
+                    style="color: #1a1a2e;">Network</span>
+                <h2 id="ap-ssid"
+                    style="color: #1a1a2e; font-size: 48px; line-height: 1; font-weight: 700; letter-spacing: 0.05em;">
+                    ODS Player
+                </h2>
+            </div>
 
-            <!-- Device Name -->
-            <p class="text-2xl font-bold mb-3" id="ap-ssid" style="color: #1a1a2e;">ODS Player</p>
-
-            <!-- Instructions — compact horizontal layout -->
-            <div class="flex gap-6 items-start" style="max-width: 480px;">
-                <div class="flex flex-col items-center text-center gap-1">
-                    <span
-                        style="display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; background: #3c83f6; color: white; border-radius: 50%; font-size: 14px; font-weight: 700;">1</span>
-                    <span class="text-sm font-medium" style="color: #1a1a2e;">Scan QR code<br>to connect</span>
-                </div>
-                <div class="flex flex-col items-center text-center gap-1">
-                    <span
-                        style="display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; background: #3c83f6; color: white; border-radius: 50%; font-size: 14px; font-weight: 700;">2</span>
-                    <span class="text-sm font-medium" style="color: #1a1a2e;">Open your<br>favorite browser</span>
-                </div>
-                <div class="flex flex-col items-center text-center gap-1">
-                    <span
-                        style="display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; background: #3c83f6; color: white; border-radius: 50%; font-size: 14px; font-weight: 700;">3</span>
-                    <span class="text-sm font-medium" style="color: #1a1a2e;">Enter info<br>and connect</span>
+            <!-- Instructions — matches player_link exactly -->
+            <div class="w-full">
+                <div class="space-y-4">
+                    <div class="flex items-center gap-4">
+                        <div class="step-circle step-circle-active">1</div>
+                        <p class="text-xl leading-snug whitespace-nowrap" style="color: #1a1a2e;">
+                            Scan QR code to connect
+                        </p>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <div class="step-circle step-circle-inactive">2</div>
+                        <p class="text-xl leading-snug whitespace-nowrap" style="color: #1a1a2e;">
+                            Open your favorite browser
+                        </p>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <div class="step-circle step-circle-inactive">3</div>
+                        <p class="text-xl leading-snug whitespace-nowrap" style="color: #1a1a2e;">
+                            Enter network info and connect
+                        </p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -363,11 +413,13 @@
 
     <!-- Footer / Status Pill — positioned at 90% vertical (matches throbber .90) -->
     <footer class="absolute w-full flex justify-center z-10" style="top: 90%; transform: translateY(-50%);">
-        <div class="glass-pill px-7 py-3.5 rounded-full inline-flex items-center gap-3 shadow-lg">
-            <span class="relative flex h-3.5 w-3.5">
-                <span
-                    class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                <span class="relative inline-flex rounded-full h-3.5 w-3.5 bg-amber-500"></span>
+        <div class="glass-pill px-7 rounded-full inline-flex items-center gap-3 shadow-lg"
+            style="padding-top: 0.875rem; padding-bottom: 0.875rem;">
+            <span class="relative flex" style="height: 0.875rem; width: 0.875rem;">
+                <span class="animate-ping absolute inline-flex rounded-full bg-amber-400 opacity-75"
+                    style="height: 100%; width: 100%;"></span>
+                <span class="relative inline-flex rounded-full bg-amber-500"
+                    style="height: 0.875rem; width: 0.875rem;"></span>
             </span>
             <span class="text-gray-900 font-medium tracking-wide" style="font-size: 1.05rem;">Waiting for
                 network...</span>
@@ -426,7 +478,7 @@
             fetch('/api/loader-ready').catch(() => { });
         }
         window.addEventListener('load', revealPage);
-        // Safety: reveal after 6s even if resources stall
+        // Safety: reveal after 6s even if resources stall (Tailwind CDN may not load in AP mode)
         setTimeout(revealPage, 6000);
 
         // ========================================
@@ -449,8 +501,7 @@
                 }
             })
             .catch(err => {
-                document.getElementById('status').textContent = 'Error loading QR code';
-                document.getElementById('status').classList.add('text-red-600');
+                console.error('QR Error:', err);
             });
 
         // Poll for network connection
@@ -458,25 +509,14 @@
             try {
                 const response = await fetch('/api/status');
                 const data = await response.json();
-                const statusEl = document.getElementById('status');
                 const pill = document.querySelector('footer .glass-pill');
 
                 if (data.wifi_connected || data.ethernet_connected) {
-                    const msg = data.wifi_connected
-                        ? `Connected to ${data.ssid}! Proceeding...`
-                        : 'Ethernet connected! Proceeding...';
-
-                    if (statusEl) {
-                        statusEl.textContent = msg;
-                        statusEl.classList.remove('text-gray-900');
-                        statusEl.classList.add('text-emerald-600');
-                    }
-
                     // Update status pill
                     if (pill) {
                         pill.innerHTML = `
-                            <span class="relative inline-flex rounded-full h-3.5 w-3.5 bg-emerald-500"></span>
-                            <span class="text-gray-900 text-sm font-medium tracking-wide">Connected!</span>
+                            <span class="relative inline-flex rounded-full bg-emerald-500" style="height: 0.875rem; width: 0.875rem;"></span>
+                            <span class="text-gray-900 font-medium tracking-wide" style="font-size: 1.05rem;">Connected!</span>
                         `;
                     }
 
