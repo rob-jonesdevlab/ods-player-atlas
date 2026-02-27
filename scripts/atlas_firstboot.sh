@@ -324,7 +324,7 @@ channel=7
 wmm_enabled=0
 macaddr_acl=0
 auth_algs=1
-ignore_broadcast_ssid=1
+ignore_broadcast_ssid=0
 EOF
 
     cat > /etc/dnsmasq.d/ods-setup.conf << 'DNSEOF'
@@ -334,7 +334,7 @@ listen-address=192.168.4.1
 dhcp-range=192.168.4.2,192.168.4.20,255.255.255.0,24h
 address=/#/192.168.4.1
 port=53
-except-interface=eth0
+except-interface=end0
 except-interface=lo
 DNSEOF
 
