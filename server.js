@@ -740,7 +740,7 @@ app.get('/api/admin/services', requireAdmin, (req, res) => {
 app.get('/api/device/info', (req, res) => {
     const commands = {
         three_word_name: 'hostname 2>/dev/null || echo unknown',
-        mac_address: "ip link show 2>/dev/null | grep -A1 'state UP' | grep ether | head -1 | awk '{print $2}' || echo --",
+        mac_address: "cat /sys/class/net/end0/address 2>/dev/null || cat /sys/class/net/eth0/address 2>/dev/null || echo --",
         connection_method: "ip route get 8.8.8.8 2>/dev/null | head -1 | sed -n 's/.*dev \\([^ ]*\\).*/\\1/p' || echo --",
         ssid: "iwgetid -r 2>/dev/null || echo ''",
         ip_address: "hostname -I 2>/dev/null | awk '{print $1}' || echo --"
