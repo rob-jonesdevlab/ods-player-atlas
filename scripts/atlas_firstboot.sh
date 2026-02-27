@@ -259,9 +259,9 @@ create_users() {
     cat > /etc/sudoers.d/signage << 'SUDOEOF'
 # ODS Player OS — signage user privileges
 # server.js runs as signage and needs passwordless sudo for:
-#   WiFi: ip link, iw, wpa_cli
-#   System: reboot, shutdown, systemctl
-#   Auth: ods-auth-check.sh
+#   WiFi: ip link, iw, wpa_cli, tee (wpa_supplicant.conf)
+#   System: reboot, shutdown, systemctl (status + restart), timedatectl
+#   Admin: ods-auth-check.sh, chpasswd (password update), rm (cache/enrollment)
 # Cover all binary path variants (Armbian symlinks /sbin→/usr/bin)
 signage ALL=(ALL) NOPASSWD: /usr/bin/ip link set wlan0 *
 signage ALL=(ALL) NOPASSWD: /usr/sbin/ip link set wlan0 *
@@ -273,10 +273,27 @@ signage ALL=(ALL) NOPASSWD: /usr/sbin/wpa_cli *
 signage ALL=(ALL) NOPASSWD: /usr/sbin/reboot
 signage ALL=(ALL) NOPASSWD: /usr/sbin/shutdown *
 signage ALL=(ALL) NOPASSWD: /usr/bin/systemctl status *
+signage ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart *
+signage ALL=(ALL) NOPASSWD: /usr/bin/timedatectl set-timezone *
+signage ALL=(ALL) NOPASSWD: /usr/sbin/chpasswd
+signage ALL=(ALL) NOPASSWD: /usr/bin/tee -a /etc/wpa_supplicant/wpa_supplicant.conf
+signage ALL=(ALL) NOPASSWD: /usr/bin/tee /etc/wpa_supplicant/wpa_supplicant.conf
+signage ALL=(ALL) NOPASSWD: /usr/bin/rm -rf /home/signage/.config/chromium*
+signage ALL=(ALL) NOPASSWD: /usr/bin/rm -f /var/lib/ods/enrollment.flag
 signage ALL=(ALL) NOPASSWD: /usr/local/bin/ods-auth-check.sh *
 SUDOEOF
     chmod 0440 /etc/sudoers.d/signage
-    log "  ✅ signage sudoers created (WiFi, reboot, systemctl)"
+    log "  ✅ signage sudoers created (WiFi, system, admin tools)"
+
+    # Create wpa_supplicant base config for WiFi support
+    mkdir -p /etc/wpa_supplicant
+    cat > /etc/wpa_supplicant/wpa_supplicant.conf << 'WPAEOF'
+ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
+update_config=1
+country=US
+WPAEOF
+    chmod 644 /etc/wpa_supplicant/wpa_supplicant.conf
+    log "  ✅ wpa_supplicant.conf created"
 
     # Create otter admin user with sudo
     if ! id otter >/dev/null 2>&1; then

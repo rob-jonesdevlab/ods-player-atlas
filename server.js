@@ -69,20 +69,17 @@ app.get('/api/display/modes', (req, res) => {
 // Configure WiFi
 app.post('/api/wifi/configure', (req, res) => {
     const { ssid, password } = req.body;
+    if (!ssid) return res.status(400).json({ error: 'SSID required' });
 
-    const wpaConfig = `
-network={
-    ssid="${ssid}"
-    psk="${password}"
-}
-`;
+    const wpaConfig = `\nnetwork={\n    ssid="${ssid}"\n    psk="${password}"\n}\n`;
 
-    exec(`echo '${wpaConfig}' >> /etc/wpa_supplicant/wpa_supplicant.conf`, (error) => {
+    // Use sudo tee to write (signage can't write /etc/ directly)
+    exec(`echo '${wpaConfig}' | sudo tee -a /etc/wpa_supplicant/wpa_supplicant.conf > /dev/null`, (error) => {
         if (error) {
             return res.status(500).json({ error: 'Failed to configure WiFi' });
         }
 
-        exec('wpa_cli -i wlan0 reconfigure', (error) => {
+        exec('sudo wpa_cli -i wlan0 reconfigure', (error) => {
             if (error) {
                 return res.status(500).json({ error: 'Failed to restart WiFi' });
             }
@@ -248,6 +245,48 @@ app.post('/api/system/shutdown', (req, res) => {
     setTimeout(() => exec('sudo /usr/sbin/shutdown -h now'), 2000);
 });
 
+// Unpair device — removes from ODS Cloud active, keeps in Supabase, reboots to player_link
+app.post('/api/system/unpair', async (req, res) => {
+    console.log('[UNPAIR] Device unpair initiated');
+    res.json({ success: true, message: 'Unpairing device...' });
+
+    setTimeout(async () => {
+        try {
+            // Read enrollment data
+            let playerId = null;
+            let cloudUrl = null;
+            try {
+                const flagData = JSON.parse(fs.readFileSync('/var/lib/ods/enrollment.flag', 'utf8'));
+                playerId = flagData.player_id;
+                cloudUrl = flagData.cloud_url || process.env.ODS_SERVER_URL || 'https://api.ods-cloud.com';
+            } catch (e) { /* no enrollment data */ }
+
+            // Call ODS Cloud to unpair (keep in Supabase)
+            if (playerId && cloudUrl) {
+                try {
+                    await fetch(`${cloudUrl}/api/players/${playerId}/unpair`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                    console.log('[UNPAIR] Player unpaired from ODS Cloud');
+                } catch (e) {
+                    console.error('[UNPAIR] Cloud unpair failed (non-blocking):', e.message);
+                }
+            }
+
+            // Clear local enrollment
+            exec('rm -f /var/lib/ods/enrollment.flag');
+            console.log('[UNPAIR] Local state cleared — rebooting');
+
+            // Reboot to player_link workflow
+            exec('sudo /usr/sbin/reboot');
+        } catch (e) {
+            console.error('[UNPAIR] Error:', e.message);
+            exec('sudo /usr/sbin/reboot');
+        }
+    }, 2000);
+});
+
 app.post('/api/system/resolution', (req, res) => {
     const { resolution } = req.body;
     if (!resolution || !resolution.match(/^\d+x\d+$/)) {
@@ -264,17 +303,82 @@ app.post('/api/system/resolution', (req, res) => {
 });
 
 app.post('/api/system/cache-clear', (req, res) => {
-    exec('rm -rf /home/signage/.config/chromium/Default/Cache/* /home/signage/.config/chromium/Default/Code\\ Cache/*', (error) => {
+    exec('sudo rm -rf /home/signage/.config/chromium/Default/Cache/* /home/signage/.config/chromium/Default/Code\\ Cache/*', (error) => {
         if (error) return res.status(500).json({ error: 'Failed to clear cache' });
         res.json({ success: true, message: 'Browser cache cleared. Restart to take effect.' });
     });
 });
 
-app.post('/api/system/factory-reset', (req, res) => {
-    res.json({ success: true, message: 'Factory reset initiated...' });
-    setTimeout(() => {
-        exec('rm -rf /home/signage/.config/chromium && sudo /usr/sbin/reboot');
+app.post('/api/system/factory-reset', async (req, res) => {
+    console.log('[FACTORY RESET] Initiated — restoring P:2.5 state');
+    res.json({ success: true, message: 'Factory reset initiated. Device will reboot to enrollment...' });
+
+    setTimeout(async () => {
+        try {
+            // 1. Read enrollment data before clearing
+            let playerId = null;
+            let cloudUrl = null;
+            try {
+                const flagData = JSON.parse(fs.readFileSync('/var/lib/ods/enrollment.flag', 'utf8'));
+                playerId = flagData.player_id;
+                cloudUrl = flagData.cloud_url || process.env.ODS_SERVER_URL || 'https://api.ods-cloud.com';
+            } catch (e) { /* no enrollment data */ }
+
+            // 2. Call ODS Cloud to remove player from active (keep in Supabase)
+            if (playerId && cloudUrl) {
+                try {
+                    await fetch(`${cloudUrl}/api/players/${playerId}/unpair`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                    console.log('[FACTORY RESET] Player unpaired from ODS Cloud');
+                } catch (e) {
+                    console.error('[FACTORY RESET] Cloud unpair failed (non-blocking):', e.message);
+                }
+            }
+
+            // 3. Clear all local enrollment/pairing state
+            exec('rm -f /var/lib/ods/enrollment.flag');
+            exec('rm -rf /home/signage/.config/chromium');
+            exec('rm -rf /home/signage/ODS/cache/*');
+
+            console.log('[FACTORY RESET] Local state cleared — rebooting to P:2.5');
+
+            // 4. Reboot — device will go through player_link enrollment again
+            exec('sudo /usr/sbin/reboot');
+        } catch (e) {
+            console.error('[FACTORY RESET] Error:', e.message);
+            exec('sudo /usr/sbin/reboot'); // reboot anyway
+        }
     }, 2000);
+});
+
+// Timezone — persist system timezone
+app.post('/api/system/timezone', (req, res) => {
+    const { timezone } = req.body;
+    if (!timezone) return res.status(400).json({ error: 'Timezone required' });
+    exec(`sudo timedatectl set-timezone '${timezone.replace(/[^a-zA-Z0-9_/]/g, '')}'`, { timeout: 5000 }, (error) => {
+        if (error) return res.status(500).json({ error: 'Failed to set timezone' });
+        res.json({ success: true, message: `Timezone set to ${timezone}` });
+    });
+});
+
+// Audio — get current volume
+app.get('/api/system/volume', (req, res) => {
+    exec("amixer sget Master 2>/dev/null | grep -oP '\\[\\d+%\\]' | head -1 | tr -d '[]%'", { timeout: 3000 }, (error, stdout) => {
+        const volume = parseInt(stdout?.trim()) || 75;
+        res.json({ volume });
+    });
+});
+
+// Audio — set volume
+app.post('/api/system/volume', (req, res) => {
+    const { volume } = req.body;
+    const vol = Math.max(0, Math.min(100, parseInt(volume) || 75));
+    exec(`amixer sset Master ${vol}% 2>/dev/null`, { timeout: 3000 }, (error) => {
+        if (error) return res.status(500).json({ error: 'Failed to set volume' });
+        res.json({ success: true, volume: vol });
+    });
 });
 
 // System logs — typed log viewer
@@ -391,7 +495,21 @@ app.post('/api/admin/terminal', requireAdmin, (req, res) => {
 app.post('/api/admin/restart-services', requireAdmin, (req, res) => {
     console.log(`[ADMIN] Services restart requested by ${req.adminUser}`);
     res.json({ success: true, message: 'Restarting all ODS services...' });
-    setTimeout(() => exec('systemctl restart ods-kiosk ods-webserver ods-health-monitor ods-dpms-enforce.timer 2>/dev/null'), 1000);
+    setTimeout(() => exec('sudo systemctl restart ods-kiosk ods-webserver ods-health-monitor ods-dpms-enforce.timer 2>/dev/null'), 1000);
+});
+
+// Update admin password
+app.post('/api/admin/password', requireAdmin, (req, res) => {
+    const { newPassword } = req.body;
+    if (!newPassword || newPassword.length < 8) {
+        return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    }
+    // Change otter user password via chpasswd
+    exec(`echo 'otter:${newPassword.replace(/'/g, "'\\'")}' | sudo chpasswd`, { timeout: 5000 }, (error) => {
+        if (error) return res.status(500).json({ error: 'Failed to update password' });
+        console.log(`[ADMIN] Password updated by ${req.adminUser}`);
+        res.json({ success: true, message: 'Admin password updated' });
+    });
 });
 
 // Toggle SSH

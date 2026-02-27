@@ -949,10 +949,24 @@
         }
         setInterval(updateClock, 1000); updateClock();
 
-        function updateTimezone() {
+        async function updateTimezone() {
             selectedTimezone = document.getElementById('time-timezone').value;
             updateClock();
-            showAlert('Timezone Updated', `Timezone set to ${selectedTimezone}.`, 'schedule');
+            try {
+                const res = await fetch('/api/system/timezone', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ timezone: selectedTimezone })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showAlert('Timezone Updated', `System timezone set to ${selectedTimezone}.`, 'schedule');
+                } else {
+                    showAlert('Error', data.error || 'Failed to set timezone', 'error');
+                }
+            } catch (e) {
+                showAlert('Timezone Updated', `Display timezone set to ${selectedTimezone}. System update may require root.`, 'schedule');
+            }
         }
 
         // ========================================
@@ -1075,29 +1089,76 @@
                         const confirm = document.getElementById('modal-confirm-pass')?.value;
                         if (!pass || pass.length < 8) { setTimeout(() => showAlert('Too Short', 'Password must be at least 8 characters', 'error'), 250); return; }
                         if (pass !== confirm) { setTimeout(() => showAlert('Mismatch', 'Passwords do not match', 'error'), 250); return; }
-                        setTimeout(() => showAlert('Not Implemented', 'Password change will be available in v9', 'info'), 250);
+                        // Call backend to update password
+                        (async () => {
+                            try {
+                                const res = await fetch('/api/admin/password', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json', 'X-Admin-Token': adminToken },
+                                    body: JSON.stringify({ newPassword: pass })
+                                });
+                                const data = await res.json();
+                                setTimeout(() => showAlert(
+                                    data.success ? 'Password Updated' : 'Error',
+                                    data.message || data.error || 'Unknown error',
+                                    data.success ? 'check_circle' : 'error'
+                                ), 250);
+                            } catch (e) {
+                                setTimeout(() => showAlert('Error', e.message, 'error'), 250);
+                            }
+                        })();
                     }
                 }
             ], bodyHtml);
         }
 
-        function unpairDevice() {
-            localStorage.removeItem('ods_device_uuid');
-            localStorage.removeItem('ods_cpu_serial');
-            localStorage.removeItem('ods_pairing_rate_limit');
-            showAlert('Unpaired', 'Device unpaired. Reloading...', 'link_off');
-            setTimeout(() => { window.location.href = '/player_link.html'; }, 2000);
+        async function unpairDevice() {
+            try {
+                const res = await fetch('/api/system/unpair', { method: 'POST' });
+                const data = await res.json();
+                localStorage.removeItem('ods_device_uuid');
+                localStorage.removeItem('ods_cpu_serial');
+                localStorage.removeItem('ods_pairing_rate_limit');
+                showAlert('Unpaired', data.message || 'Device unpaired. Rebooting...', 'link_off');
+            } catch (e) {
+                // Fallback — clear local and redirect
+                localStorage.removeItem('ods_device_uuid');
+                localStorage.removeItem('ods_cpu_serial');
+                localStorage.removeItem('ods_pairing_rate_limit');
+                showAlert('Unpaired', 'Device unpaired locally. Reloading...', 'link_off');
+                setTimeout(() => { window.location.href = '/player_link.html'; }, 2000);
+            }
         }
 
-        // Volume slider
-        document.getElementById('audio-volume').addEventListener('input', function () {
+        // Volume slider — call backend on change
+        const volumeSlider = document.getElementById('audio-volume');
+        volumeSlider.addEventListener('input', function () {
             document.getElementById('audio-volume-label').textContent = this.value + '%';
         });
+        volumeSlider.addEventListener('change', async function () {
+            try {
+                await fetch('/api/system/volume', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ volume: this.value })
+                });
+            } catch (e) { console.error('Volume set error:', e); }
+        });
+
+        // Load initial volume from system
+        async function loadVolume() {
+            try {
+                const res = await fetch('/api/system/volume');
+                const data = await res.json();
+                volumeSlider.value = data.volume;
+                document.getElementById('audio-volume-label').textContent = data.volume + '%';
+            } catch (e) { console.error('Volume load error:', e); }
+        }
 
         // ========================================
         // INITIAL LOAD
         // ========================================
-        window.addEventListener('load', function () { refreshNetworkStatus(); refreshSystemInfo(); loadDisplayModes(); loadWiFiState(); });
+        window.addEventListener('load', function () { refreshNetworkStatus(); refreshSystemInfo(); loadDisplayModes(); loadWiFiState(); loadVolume(); });
         setInterval(function () { refreshNetworkStatus(); refreshSystemInfo(); }, 10000);
 
         // WiFi toggle
