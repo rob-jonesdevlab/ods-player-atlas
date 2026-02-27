@@ -176,24 +176,42 @@ app.post('/api/wifi/configure', (req, res) => {
     const { ssid, password } = req.body;
     if (!ssid) return res.status(400).json({ error: 'SSID required' });
 
-    const wpaConfig = `\nnetwork={\n    ssid="${ssid}"\n    psk="${password}"\n}\n`;
+    // Build wpa_supplicant network block
+    const wpaConfig = password
+        ? `\nnetwork={\n    ssid="${ssid}"\n    psk="${password}"\n}\n`
+        : `\nnetwork={\n    ssid="${ssid}"\n    key_mgmt=NONE\n}\n`;
 
-    // Use sudo tee to write (signage can't write /etc/ directly)
+    // Step 1: Write WiFi credentials
     exec(`echo '${wpaConfig}' | sudo tee -a /etc/wpa_supplicant/wpa_supplicant.conf > /dev/null`, (error) => {
         if (error) {
             return res.status(500).json({ error: 'Failed to configure WiFi' });
         }
 
-        // Stop AP mode first, then switch to client mode
-        exec('sudo /usr/local/bin/ods-setup-ap.sh stop', () => {
+        // Step 2: Stop AP service (systemd restarts wpa_supplicant via ExecStop)
+        exec('sudo systemctl stop ods-setup-ap', { timeout: 10000 }, () => {
+            // Step 3: Give wpa_supplicant time to start, then reconfigure
             setTimeout(() => {
-                exec('sudo ip link set wlan0 up && sudo wpa_supplicant -B -i wlan0 -c /etc/wpa_supplicant/wpa_supplicant.conf && sleep 2 && sudo wpa_cli -i wlan0 reconfigure', { timeout: 15000 }, (error) => {
-                    if (error) {
-                        return res.status(500).json({ error: 'Failed to connect to WiFi' });
-                    }
-                    res.json({ success: true, message: 'WiFi configured. Connecting...' });
+                exec('sudo wpa_cli -i wlan0 reconfigure 2>/dev/null; sudo dhclient wlan0 2>/dev/null', { timeout: 10000 }, () => {
+                    // Respond immediately — connection is in progress
+                    res.json({ success: true, message: `Connecting to ${ssid}...` });
+
+                    // Step 4: Verify connection after 15 seconds — if not connected, restart AP
+                    setTimeout(() => {
+                        exec('iwgetid -r', (err, stdout) => {
+                            const connectedSsid = (stdout || '').trim();
+                            if (connectedSsid) {
+                                console.log(`[WiFi] Connected to "${connectedSsid}"`);
+                            } else {
+                                console.log('[WiFi] Connection failed after 15s — restarting AP');
+                                exec('sudo systemctl start ods-setup-ap', (e) => {
+                                    if (e) console.error('[WiFi] Failed to restart AP:', e.message);
+                                    else console.log('[WiFi] AP restarted — user can try again');
+                                });
+                            }
+                        });
+                    }, 15000);
                 });
-            }, 2000);
+            }, 3000);
         });
     });
 });
