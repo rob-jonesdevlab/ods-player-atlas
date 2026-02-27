@@ -2,9 +2,17 @@
 <html lang="en">
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
     <title>ODS Player</title>
+    <link href="https://fonts.googleapis.com" rel="preconnect" />
+    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@700&display=swap"
+        rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+        rel="stylesheet" />
+    <script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -12,28 +20,32 @@
             box-sizing: border-box;
         }
 
+        html,
         body {
-            background: #0a0a0a;
-            color: #ffffff;
-            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-            overflow: hidden;
-            -webkit-user-select: none;
-            user-select: none;
+            background: #000 !important;
             width: 100vw;
             height: 100vh;
+            overflow: hidden;
+            font-family: 'Inter', -apple-system, sans-serif;
         }
 
-        /* ==========================================
-           CONTENT SLIDESHOW (active when playing)
-           ========================================== */
-        #slideshow {
+        body {
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+
+        body.ready {
+            opacity: 1;
+        }
+
+        /* ─── Content Display ─── */
+        .player-canvas {
             position: fixed;
             top: 0;
             left: 0;
             width: 100vw;
             height: 100vh;
-            z-index: 10;
-            display: none;
+            background: #000;
         }
 
         .slide {
@@ -43,604 +55,548 @@
             width: 100%;
             height: 100%;
             opacity: 0;
-            transition: opacity 0.8s ease-in-out;
+            transition: opacity 1s ease-in-out;
             display: flex;
             align-items: center;
             justify-content: center;
-            background: #000;
         }
 
         .slide.active {
             opacity: 1;
+            z-index: 2;
+        }
+
+        .slide.outgoing {
+            opacity: 0;
+            z-index: 1;
         }
 
         .slide img {
-            max-width: 100%;
-            max-height: 100%;
+            width: 100%;
+            height: 100%;
             object-fit: contain;
+            background: #000;
         }
 
         .slide video {
             width: 100%;
             height: 100%;
             object-fit: contain;
+            background: #000;
         }
 
-        .slide iframe {
-            width: 100%;
-            height: 100%;
-            border: none;
-        }
-
-        /* ==========================================
-           WAITING SCREEN (shown when no content)
-           ========================================== */
-        #waiting {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            opacity: 0;
-            transition: opacity 0.3s ease;
-        }
-
-        #waiting.ready {
-            opacity: 1;
-        }
-
-        .container {
-            text-align: center;
-            max-width: 600px;
-            padding: 40px;
-        }
-
-        .logo {
-            width: 120px;
-            height: 120px;
-            margin: 0 auto 32px;
-            border-radius: 24px;
-            animation: pulse 3s ease-in-out infinite;
-        }
-
-        .logo img {
-            width: 100%;
-            height: 100%;
-            border-radius: 24px;
-        }
-
-        @keyframes pulse {
-
-            0%,
-            100% {
-                filter: drop-shadow(0 8px 32px rgba(245, 132, 42, 0.3));
-            }
-
-            50% {
-                filter: drop-shadow(0 8px 48px rgba(245, 132, 42, 0.5));
-            }
-        }
-
-        h1 {
-            font-size: 28px;
-            font-weight: 600;
-            margin-bottom: 8px;
-            background: linear-gradient(135deg, #fff, #ccc);
-            -webkit-background-clip: text;
-            background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        .subtitle {
-            color: #888;
-            font-size: 14px;
-            margin-bottom: 40px;
-        }
-
-        .info-table {
-            width: 100%;
-            max-width: 400px;
-            margin: 0 auto;
-        }
-
-        .info-row {
-            display: flex;
-            justify-content: space-between;
-            padding: 12px 0;
-            border-bottom: 1px solid #1a1a1a;
-        }
-
-        .info-row:last-child {
-            border-bottom: none;
-        }
-
-        .info-label {
-            color: #666;
-            font-size: 13px;
-        }
-
-        .info-value {
-            color: #ddd;
-            font-size: 13px;
-            font-weight: 500;
-        }
-
-        .info-value.connected {
-            color: #22c55e;
-        }
-
-        .info-value.disconnected {
-            color: #ef4444;
-        }
-
-        .waiting-indicator {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 12px;
-            margin-top: 48px;
-            color: #555;
-            font-size: 13px;
-        }
-
-        .waiting-indicator .dot {
-            width: 8px;
-            height: 8px;
-            background: #f59e0b;
-            border-radius: 50%;
-            animation: blink 2s ease-in-out infinite;
-        }
-
-        @keyframes blink {
-
-            0%,
-            100% {
-                opacity: 0.3;
-            }
-
-            50% {
-                opacity: 1;
-            }
-        }
-
-        /* ==========================================
-           OFFLINE BORDER INDICATOR
-           Thin border on all edges, escalating color
-           by offline duration. Uses inset box-shadow
-           for zero layout impact.
-           ========================================== */
-        #offline-border {
+        /* ─── Waiting for Content State ─── */
+        .waiting-state {
             position: fixed;
             top: 0;
             left: 0;
             width: 100vw;
             height: 100vh;
-            z-index: 200;
-            pointer-events: none;
-            box-shadow: none;
-            transition: box-shadow 0.6s ease;
+            background: url('/resources/designs/ODS_Background.png') center/cover no-repeat;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
         }
 
-        /* Tier 1: Yellow (0-30 min offline) */
-        #offline-border.tier-warning {
-            box-shadow: inset 0 0 0 6px #eab308;
+        .waiting-state.hidden {
+            display: none;
         }
 
-        /* Tier 2: Orange (30-60 min offline) */
-        #offline-border.tier-alert {
-            box-shadow: inset 0 0 0 6px #f97316;
+        .waiting-card {
+            background: rgba(255, 255, 255, 0.08) !important;
+            backdrop-filter: blur(40px) !important;
+            -webkit-backdrop-filter: blur(40px) !important;
+            border: 1px solid rgba(255, 255, 255, 0.15) !important;
+            border-radius: 24px !important;
+            padding: 60px 48px !important;
+            text-align: center;
+            max-width: 520px;
+            width: 90%;
         }
 
-        /* Tier 3: Red (60-120 min offline) */
-        #offline-border.tier-critical {
-            box-shadow: inset 0 0 0 6px #ef4444;
+        .waiting-icon {
+            font-size: 64px;
+            color: rgba(255, 255, 255, 0.4);
+            margin-bottom: 24px;
         }
 
-        /* Tier 4: Flashing Red (120+ min offline) */
-        #offline-border.tier-emergency {
-            box-shadow: inset 0 0 0 6px #ef4444;
-            animation: border-flash 1s ease-in-out infinite;
+        .waiting-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: 8px;
+            letter-spacing: -0.01em;
         }
 
-        @keyframes border-flash {
+        .waiting-subtitle {
+            font-size: 15px;
+            font-weight: 400;
+            color: rgba(255, 255, 255, 0.5);
+            line-height: 1.5;
+            margin-bottom: 32px;
+        }
+
+        .waiting-pulse {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 20px;
+            border-radius: 100px;
+            background: rgba(59, 130, 246, 0.12);
+            border: 1px solid rgba(59, 130, 246, 0.2);
+        }
+
+        .waiting-pulse .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #3b82f6;
+            animation: pulse-dot 2s ease-in-out infinite;
+        }
+
+        .waiting-pulse span {
+            font-size: 13px;
+            font-weight: 500;
+            color: rgba(59, 130, 246, 0.8);
+            letter-spacing: 0.02em;
+        }
+
+        @keyframes pulse-dot {
 
             0%,
             100% {
-                box-shadow: inset 0 0 0 6px #ef4444;
+                opacity: 0.3;
+                transform: scale(0.8);
             }
 
             50% {
-                box-shadow: inset 0 0 0 6px transparent;
+                opacity: 1;
+                transform: scale(1.2);
             }
         }
 
-        /* Syncing indicator — subtle blue pulse in bottom-right */
-        #sync-indicator {
+        /* ─── Status Pill (bottom-right, minimal) ─── */
+        .status-pill {
             position: fixed;
-            bottom: 12px;
-            right: 12px;
-            z-index: 201;
-            width: 10px;
-            height: 10px;
+            bottom: 16px;
+            right: 16px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 14px;
+            border-radius: 100px;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            z-index: 100;
+            opacity: 0.6;
+            transition: opacity 0.3s ease;
+        }
+
+        .status-pill:hover {
+            opacity: 1;
+        }
+
+        .status-pill .dot {
+            width: 6px;
+            height: 6px;
             border-radius: 50%;
-            background: #3b82f6;
-            display: none;
-            animation: blink 1s ease-in-out infinite;
+            background: #10b981;
+        }
+
+        .status-pill .dot.offline {
+            background: #ef4444;
+        }
+
+        .status-pill .dot.syncing {
+            background: #f59e0b;
+            animation: pulse-dot 1.5s ease-in-out infinite;
+        }
+
+        .status-pill .label {
+            font-size: 11px;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.6);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* ─── Progress Bar (thin, top edge) ─── */
+        .slide-progress {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 3px;
+            background: rgba(59, 130, 246, 0.7);
+            z-index: 50;
+            transition: width linear;
+            border-radius: 0 2px 2px 0;
+        }
+
+        /* ─── Keyboard lockdown ─── */
+        body.locked * {
+            user-select: none !important;
         }
     </style>
 </head>
 
 <body>
-    <!-- Content Slideshow -->
-    <div id="slideshow"></div>
+    <!-- Content Canvas -->
+    <div class="player-canvas" id="playerCanvas"></div>
 
-    <!-- Waiting Screen (no content) -->
-    <div id="waiting">
-        <div class="container">
-            <div class="logo">
-                <img src="/resources/ods-player-logo.png" alt="ODS" />
+    <!-- Waiting for Content -->
+    <div class="waiting-state" id="waitingState">
+        <div class="waiting-card">
+            <div class="waiting-icon">
+                <span class="material-symbols-outlined" style="font-size: 64px;">tv_signin</span>
             </div>
-            <h1>Player Ready</h1>
-            <p class="subtitle">Otter Digital Signage</p>
-
-            <div class="info-table">
-                <div class="info-row">
-                    <span class="info-label">Account</span>
-                    <span class="info-value" id="account">Loading...</span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">Device</span>
-                    <span class="info-value" id="device">Loading...</span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">Hostname</span>
-                    <span class="info-value" id="hostname">Loading...</span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">IP Address</span>
-                    <span class="info-value" id="ip">Loading...</span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">Network</span>
-                    <span class="info-value" id="network">Checking...</span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">Cloud</span>
-                    <span class="info-value" id="cloud-status">Connecting...</span>
-                </div>
+            <div class="waiting-title">Paired & Ready</div>
+            <div class="waiting-subtitle">
+                This display is paired with ODS Cloud.<br>
+                Assign a playlist from the dashboard to begin.
             </div>
-
-            <div class="waiting-indicator">
-                <span class="dot"></span>
-                <span>Waiting for content from ODS Cloud</span>
+            <div class="waiting-pulse">
+                <div class="dot"></div>
+                <span>Awaiting content</span>
             </div>
         </div>
     </div>
 
-    <!-- Offline Border Indicator -->
-    <div id="offline-border"></div>
+    <!-- Slide Progress Bar -->
+    <div class="slide-progress" id="slideProgress"></div>
 
-    <!-- Sync Indicator (small blue dot) -->
-    <div id="sync-indicator"></div>
+    <!-- Status Pill -->
+    <div class="status-pill" id="statusPill">
+        <div class="dot" id="statusDot"></div>
+        <div class="label" id="statusLabel">connecting</div>
+    </div>
 
     <script>
         // ========================================
-        // CONTENT SLIDESHOW ENGINE
+        // ODS PLAYER — Content Renderer
         // ========================================
+        const API_URL = 'https://api.ods-cloud.com';
+        const CONFIG_POLL_INTERVAL = 30 * 1000;     // Check for config changes every 30s
+        const HEARTBEAT_INTERVAL = 60 * 1000;       // Heartbeat every 60s
+        const RECONNECT_DELAY = 5000;
 
-        let currentSlideIndex = -1;
-        let slides = [];
-        let slideTimer = null;
+        let playerId = localStorage.getItem('ods_player_id');
+        let deviceUuid = localStorage.getItem('ods_device_uuid');
+        let cpuSerial = localStorage.getItem('ods_cpu_serial');
+        let socket = null;
+        let currentConfig = null;
         let currentConfigHash = null;
-        let isPlaying = false;
+        let slideTimer = null;
+        let progressTimer = null;
+        let currentSlideIndex = 0;
+        let assets = [];
 
-        /**
-         * Fetch content from local player server
-         */
-        async function fetchContent() {
-            try {
-                const res = await fetch('/api/player/content');
-                const data = await res.json();
-
-                if (data.hasContent && data.playlist && data.playlist.assets.length > 0) {
-                    // Check if content changed
-                    if (data.playlist.config_hash !== currentConfigHash) {
-                        currentConfigHash = data.playlist.config_hash;
-                        loadSlideshow(data.playlist);
-                    }
-                } else {
-                    // No content — show waiting screen
-                    if (isPlaying) {
-                        stopSlideshow();
-                    }
-                }
-            } catch (err) {
-                console.error('[Player] Content fetch error:', err.message);
-            }
+        // ─── Status Updates ───
+        function setStatus(state, label) {
+            const dot = document.getElementById('statusDot');
+            const lbl = document.getElementById('statusLabel');
+            dot.className = 'dot' + (state === 'offline' ? ' offline' : state === 'syncing' ? ' syncing' : '');
+            lbl.textContent = label || state;
         }
 
-        /**
-         * Load slideshow from playlist data
-         */
-        function loadSlideshow(playlist) {
-            const slideshowEl = document.getElementById('slideshow');
-            slideshowEl.innerHTML = '';
-            slides = [];
-            currentSlideIndex = -1;
+        // ─── Redirect if not paired ───
+        if (!playerId && !deviceUuid) {
+            window.location.href = '/player_link.html';
+        }
 
-            playlist.assets.forEach((asset, index) => {
-                const slide = document.createElement('div');
-                slide.className = 'slide';
-                slide.dataset.duration = asset.duration * 1000;
-
-                if (asset.type === 'image' || asset.type === 'photo') {
-                    const img = document.createElement('img');
-                    // Use local cache path served by Express static
-                    const ext = asset.filename ? asset.filename.split('.').pop() : 'jpg';
-                    img.src = `/cache/${asset.id}.${ext}`;
-                    img.alt = asset.filename || 'Content';
-                    img.draggable = false;
-                    slide.appendChild(img);
-
-                } else if (asset.type === 'video') {
-                    const video = document.createElement('video');
-                    const ext = asset.filename ? asset.filename.split('.').pop() : 'mp4';
-                    video.src = `/cache/${asset.id}.${ext}`;
-                    video.autoplay = false;
-                    video.muted = true;
-                    video.playsInline = true;
-                    video.loop = false;
-                    slide.appendChild(video);
-                    slide.dataset.isVideo = 'true';
-
-                } else if (asset.type === 'url' || asset.type === 'webpage') {
-                    const iframe = document.createElement('iframe');
-                    iframe.src = asset.filename; // URL content uses filename as the URL
-                    iframe.sandbox = 'allow-scripts allow-same-origin';
-                    slide.appendChild(iframe);
-                }
-
-                slideshowEl.appendChild(slide);
-                slides.push(slide);
+        // ─── WebSocket Connection ───
+        function connectWebSocket() {
+            socket = io(API_URL, {
+                transports: ['websocket', 'polling'],
+                reconnection: true,
+                reconnectionDelay: RECONNECT_DELAY,
+                reconnectionAttempts: Infinity
             });
 
-            if (slides.length > 0) {
-                startSlideshow();
-            }
-        }
+            socket.on('connect', () => {
+                console.log('[WS] Connected');
+                setStatus('online', 'connected');
 
-        /**
-         * Start the slideshow
-         */
-        function startSlideshow() {
-            isPlaying = true;
-            document.getElementById('slideshow').style.display = 'block';
-            document.getElementById('waiting').style.display = 'none';
-            advanceSlide();
-        }
+                // Register this player
+                socket.emit('register', {
+                    cpu_serial: cpuSerial,
+                    name: localStorage.getItem('ods_device_name') || 'ODS Player',
+                    device_uuid: deviceUuid
+                });
+            });
 
-        /**
-         * Stop the slideshow and show waiting screen
-         */
-        function stopSlideshow() {
-            isPlaying = false;
-            if (slideTimer) clearTimeout(slideTimer);
-            document.getElementById('slideshow').style.display = 'none';
-            document.getElementById('waiting').style.display = 'flex';
-            currentConfigHash = null;
-        }
-
-        /**
-         * Advance to the next slide
-         */
-        function advanceSlide() {
-            if (slides.length === 0) return;
-
-            // Deactivate current slide
-            if (currentSlideIndex >= 0 && slides[currentSlideIndex]) {
-                const currentSlide = slides[currentSlideIndex];
-                currentSlide.classList.remove('active');
-
-                // Pause video if playing
-                const video = currentSlide.querySelector('video');
-                if (video) {
-                    video.pause();
-                    video.currentTime = 0;
+            socket.on('registered', (player) => {
+                console.log('[WS] Registered:', player.id);
+                if (!playerId) {
+                    playerId = player.id;
+                    localStorage.setItem('ods_player_id', playerId);
                 }
+            });
+
+            // Real-time playlist deployment
+            socket.on('deploy_playlist', async (data) => {
+                console.log('[WS] Playlist deployed:', data);
+                setStatus('syncing', 'syncing');
+                await fetchConfig();
+            });
+
+            // Pairing success — reload config
+            socket.on('pairing:success', async (data) => {
+                if (data.device_uuid === deviceUuid) {
+                    console.log('[WS] Pairing confirmed');
+                    await fetchConfig();
+                }
+            });
+
+            socket.on('disconnect', () => {
+                console.log('[WS] Disconnected');
+                setStatus('offline', 'offline');
+            });
+
+            socket.on('connect_error', (err) => {
+                console.error('[WS] Connection error:', err.message);
+                setStatus('offline', 'reconnecting');
+            });
+        }
+
+        // ─── Heartbeat ───
+        setInterval(() => {
+            if (socket?.connected) {
+                socket.emit('heartbeat', { player_id: playerId });
             }
+        }, HEARTBEAT_INTERVAL);
 
-            // Advance index (loop around)
-            currentSlideIndex = (currentSlideIndex + 1) % slides.length;
-            const nextSlide = slides[currentSlideIndex];
-            nextSlide.classList.add('active');
+        // ─── Config Fetch ───
+        async function fetchConfig() {
+            try {
+                if (!deviceUuid) return;
 
-            // Get duration for this slide
-            let duration = parseInt(nextSlide.dataset.duration) || 10000;
-
-            // Handle video: use video duration instead of config duration
-            if (nextSlide.dataset.isVideo === 'true') {
-                const video = nextSlide.querySelector('video');
-                if (video) {
-                    video.currentTime = 0;
-                    video.play().catch(() => { });
-
-                    // Use video's natural duration if available
-                    video.onloadedmetadata = () => {
-                        if (video.duration && isFinite(video.duration)) {
-                            // Clear the timer and set one based on actual video length
-                            if (slideTimer) clearTimeout(slideTimer);
-                            slideTimer = setTimeout(advanceSlide, video.duration * 1000 + 500);
+                // First: lightweight hash check
+                if (currentConfigHash) {
+                    try {
+                        const hashResp = await fetch(`${API_URL}/api/device/config/hash/${deviceUuid}`);
+                        if (hashResp.ok) {
+                            const hashData = await hashResp.json();
+                            if (hashData.config_hash === currentConfigHash) {
+                                console.log('[Config] No changes');
+                                return; // Config unchanged
+                            }
                         }
-                    };
-
-                    // Fallback: advance when video ends
-                    video.onended = () => {
-                        if (slideTimer) clearTimeout(slideTimer);
-                        advanceSlide();
-                    };
+                    } catch (e) {
+                        console.warn('[Config] Hash check failed, fetching full config');
+                    }
                 }
+
+                // Full config fetch
+                const resp = await fetch(`${API_URL}/api/device/config/${deviceUuid}`);
+                if (!resp.ok) {
+                    if (resp.status === 403) {
+                        console.log('[Config] Device not paired yet');
+                        showWaiting();
+                        return;
+                    }
+                    console.error('[Config] Fetch failed:', resp.status);
+                    return;
+                }
+
+                const config = await resp.json();
+                currentConfig = config;
+                currentConfigHash = config.config_hash;
+
+                // Store player_id from config for WebSocket
+                if (config.player_id && !playerId) {
+                    playerId = config.player_id;
+                    localStorage.setItem('ods_player_id', playerId);
+                }
+
+                console.log('[Config] Loaded:', {
+                    playlist: config.playlist?.name,
+                    assets: config.playlist?.assets?.length || 0
+                });
+
+                if (config.playlist && config.playlist.assets?.length > 0) {
+                    await loadPlaylist(config.playlist);
+                } else {
+                    showWaiting();
+                }
+
+                setStatus('online', 'connected');
+
+                // Report sync status
+                if (socket?.connected) {
+                    socket.emit('sync_status', {
+                        status: 'synced',
+                        config_hash: currentConfigHash,
+                        downloaded: config.playlist?.assets?.length || 0
+                    });
+                }
+
+            } catch (error) {
+                console.error('[Config] Error:', error);
+                setStatus('offline', 'error');
             }
-
-            // Set timer for next slide
-            slideTimer = setTimeout(advanceSlide, duration);
         }
 
-        // ========================================
-        // OFFLINE BORDER INDICATOR
-        // Tiered border system:
-        //   0-30 min  = yellow  (warning)
-        //   30-60 min = orange  (alert)
-        //   60-120 min = red    (critical)
-        //   120+ min  = flashing red (emergency)
-        // ========================================
-
-        let offlineSince = null;   // Timestamp when we first detected offline
-        let wasOnline = true;      // Previous state for edge detection
-
-        const OFFLINE_TIERS = [
-            { maxMinutes: 30, className: 'tier-warning' },  // Yellow
-            { maxMinutes: 60, className: 'tier-alert' },  // Orange
-            { maxMinutes: 120, className: 'tier-critical' },  // Red
-            { maxMinutes: Infinity, className: 'tier-emergency' }  // Flashing red
-        ];
-
-        function getOfflineTier(offlineMinutes) {
-            return OFFLINE_TIERS.find(t => offlineMinutes < t.maxMinutes) || OFFLINE_TIERS[OFFLINE_TIERS.length - 1];
+        // ─── Playlist Rendering ───
+        function showWaiting() {
+            document.getElementById('waitingState').classList.remove('hidden');
+            document.getElementById('playerCanvas').innerHTML = '';
+            document.getElementById('slideProgress').style.width = '0';
+            clearTimeout(slideTimer);
+            clearInterval(progressTimer);
+            assets = [];
+            currentSlideIndex = 0;
         }
 
-        function updateOfflineBorder(isConnected) {
-            const borderEl = document.getElementById('offline-border');
+        async function loadPlaylist(playlist) {
+            // Hide waiting state
+            document.getElementById('waitingState').classList.add('hidden');
 
-            if (isConnected) {
-                // Online — clear border and reset timer
-                borderEl.className = '';
-                offlineSince = null;
-                wasOnline = true;
+            assets = playlist.assets.sort((a, b) => a.order - b.order);
+            currentSlideIndex = 0;
+
+            if (assets.length === 0) {
+                showWaiting();
                 return;
             }
 
-            // Offline — start tracking if this is a new disconnect
-            if (wasOnline) {
-                offlineSince = Date.now();
-                wasOnline = false;
+            // Pre-create slide elements
+            const canvas = document.getElementById('playerCanvas');
+            canvas.innerHTML = '';
+
+            assets.forEach((asset, i) => {
+                const slide = document.createElement('div');
+                slide.className = 'slide' + (i === 0 ? ' active' : '');
+                slide.id = `slide-${i}`;
+
+                if (asset.type === 'video') {
+                    const video = document.createElement('video');
+                    video.src = `${API_URL}${asset.url}`;
+                    video.autoplay = (i === 0);
+                    video.muted = true;
+                    video.loop = false;
+                    video.playsInline = true;
+                    video.preload = 'auto';
+                    video.addEventListener('ended', () => nextSlide());
+                    video.addEventListener('error', (e) => {
+                        console.error(`[Video] Error loading asset ${asset.id}:`, e);
+                        nextSlide();
+                    });
+                    slide.appendChild(video);
+                } else {
+                    // Image (default)
+                    const img = document.createElement('img');
+                    img.src = `${API_URL}${asset.url}`;
+                    img.alt = asset.filename || '';
+                    img.loading = (i < 2) ? 'eager' : 'lazy';
+                    img.addEventListener('error', (e) => {
+                        console.error(`[Image] Error loading asset ${asset.id}:`, e);
+                    });
+                    slide.appendChild(img);
+                }
+
+                canvas.appendChild(slide);
+            });
+
+            // Start slideshow
+            startSlideTimer();
+        }
+
+        function startSlideTimer() {
+            clearTimeout(slideTimer);
+            clearInterval(progressTimer);
+
+            const asset = assets[currentSlideIndex];
+            if (!asset) return;
+
+            const slide = document.getElementById(`slide-${currentSlideIndex}`);
+            const video = slide?.querySelector('video');
+
+            // For videos, let the 'ended' event handle transition
+            if (asset.type === 'video' && video) {
+                video.currentTime = 0;
+                video.play().catch(e => console.warn('[Video] Autoplay blocked:', e));
+                // Progress bar for video
+                const updateVideoProgress = () => {
+                    if (video.duration) {
+                        const pct = (video.currentTime / video.duration) * 100;
+                        document.getElementById('slideProgress').style.width = `${pct}%`;
+                    }
+                    if (!video.ended) requestAnimationFrame(updateVideoProgress);
+                };
+                requestAnimationFrame(updateVideoProgress);
+                return;
             }
 
-            // Calculate offline duration
-            const offlineMs = Date.now() - (offlineSince || Date.now());
-            const offlineMinutes = offlineMs / (1000 * 60);
+            // For images, use duration timer
+            const duration = (asset.duration || 10) * 1000;
+            const progressBar = document.getElementById('slideProgress');
+            progressBar.style.transition = 'none';
+            progressBar.style.width = '0%';
 
-            // Apply the appropriate tier
-            const tier = getOfflineTier(offlineMinutes);
-            borderEl.className = tier.className;
+            // Trigger reflow then animate
+            requestAnimationFrame(() => {
+                progressBar.style.transition = `width ${duration}ms linear`;
+                progressBar.style.width = '100%';
+            });
+
+            slideTimer = setTimeout(() => nextSlide(), duration);
         }
 
-        async function updateSyncStatus() {
-            try {
-                const res = await fetch('/api/player/sync-status');
-                const status = await res.json();
+        function nextSlide() {
+            const prevIndex = currentSlideIndex;
+            currentSlideIndex = (currentSlideIndex + 1) % assets.length;
 
-                const cloudEl = document.getElementById('cloud-status');
-                const syncDot = document.getElementById('sync-indicator');
+            // Pause previous video
+            const prevSlide = document.getElementById(`slide-${prevIndex}`);
+            const prevVideo = prevSlide?.querySelector('video');
+            if (prevVideo) prevVideo.pause();
 
-                // Update waiting screen cloud status text
-                if (status.isConnected) {
-                    if (cloudEl) {
-                        cloudEl.textContent = 'Connected';
-                        cloudEl.className = 'info-value connected';
-                    }
-                } else {
-                    if (cloudEl) {
-                        cloudEl.textContent = 'Disconnected';
-                        cloudEl.className = 'info-value disconnected';
-                    }
-                }
+            // Transition
+            prevSlide?.classList.remove('active');
+            prevSlide?.classList.add('outgoing');
 
-                // Update offline border (active on both waiting + playing screens)
-                updateOfflineBorder(status.isConnected);
+            const nextSlideEl = document.getElementById(`slide-${currentSlideIndex}`);
+            nextSlideEl?.classList.add('active');
 
-                // Show sync dot during active sync
-                if (syncDot) {
-                    syncDot.style.display = status.syncInProgress ? 'block' : 'none';
-                }
-            } catch { /* ignore — probably offline */ }
+            // Clean outgoing after transition
+            setTimeout(() => {
+                prevSlide?.classList.remove('outgoing');
+            }, 1200);
+
+            startSlideTimer();
         }
 
-        // ========================================
-        // DEVICE INFO POLLING
-        // ========================================
+        // ─── Config Polling ───
+        setInterval(() => fetchConfig(), CONFIG_POLL_INTERVAL);
 
-        function updateDeviceInfo() {
-            fetch('/api/device/info')
-                .then(r => r.json())
-                .then(data => {
-                    const el = id => document.getElementById(id);
-                    if (el('account')) el('account').textContent = data.account_name || 'Not assigned';
-                    if (el('device')) el('device').textContent = data.device_name || 'Not assigned';
-                    if (el('hostname')) el('hostname').textContent = data.three_word_name || '--';
-                    if (el('ip')) el('ip').textContent = data.ip_address || '--';
-
-                    const networkEl = el('network');
-                    if (networkEl) {
-                        if (data.connection_type === 'Ethernet') {
-                            networkEl.textContent = 'Ethernet';
-                            networkEl.className = 'info-value connected';
-                        } else if (data.connection_type === 'WiFi') {
-                            networkEl.textContent = data.ssid ? 'WiFi (' + data.ssid + ')' : 'WiFi';
-                            networkEl.className = 'info-value connected';
-                        } else {
-                            networkEl.textContent = 'Disconnected';
-                            networkEl.className = 'info-value disconnected';
-                        }
-                    }
-                })
-                .catch(() => { });
-        }
-
-        // ========================================
-        // POLLING LOOPS
-        // ========================================
-
-        // Content check: every 10 seconds (lightweight — just checks cache)
-        setInterval(fetchContent, 10000);
-
-        // Sync status: every 15 seconds
-        setInterval(updateSyncStatus, 15000);
-
-        // Device info: every 60 seconds
-        setInterval(updateDeviceInfo, 60000);
-
-        // Initial fetches
-        fetchContent();
-        updateDeviceInfo();
-        updateSyncStatus();
-
-        // Signal page is ready (for boot transition)
-        fetch('/api/signal-ready', { method: 'POST' }).catch(() => { });
-
-        // ========================================
-        // FOUC GUARD
-        // ========================================
-        function revealPage() { document.getElementById('waiting').classList.add('ready'); }
-        window.addEventListener('load', revealPage);
-        setTimeout(revealPage, 6000);
-
-        // ========================================
-        // KEYBOARD SECURITY
-        // ========================================
-        document.addEventListener('keydown', function (e) {
+        // ─── Keyboard Lockdown (production kiosk) ───
+        document.addEventListener('keydown', (e) => {
+            // Allow Ctrl+Alt+Shift+O for system config overlay
             if (e.ctrlKey && e.altKey && e.shiftKey && e.key === 'O') {
-                e.preventDefault();
                 window.location.href = '/system_config.html';
                 return;
             }
-            if (e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) {
-                e.preventDefault();
-                e.stopPropagation();
-            }
+            // Block everything else
+            e.preventDefault();
+            e.stopPropagation();
         }, true);
 
-        // Block right-click
         document.addEventListener('contextmenu', e => e.preventDefault());
+
+        // ─── Init ───
+        async function init() {
+            document.body.classList.add('ready', 'locked');
+            setStatus('syncing', 'connecting');
+            connectWebSocket();
+
+            // Wait a moment for WS registration, then fetch config
+            setTimeout(async () => {
+                await fetchConfig();
+            }, 2000);
+        }
+
+        init();
     </script>
 </body>
 
