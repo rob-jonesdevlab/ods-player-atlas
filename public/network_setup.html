@@ -79,36 +79,35 @@
 
     <!-- Main Content — pb-44 ensures card stays above the status pill at 90% -->
     <main class="flex-1 flex flex-col items-center justify-center w-full px-4 pb-44 z-10">
-        <div class="glass-card rounded-2xl p-10 md:p-14 flex flex-col items-center shadow-2xl w-auto">
+        <div class="glass-card rounded-2xl p-6 md:p-8 flex flex-col items-center shadow-2xl w-auto">
             <!-- Title -->
-            <h2 class="text-4xl font-bold mb-2 whitespace-nowrap" style="color: #1a1a2e;">Network Setup</h2>
-            <p class="mb-8 text-center text-2xl font-semibold whitespace-nowrap" style="color: #1a1a2e;">
+            <h2 class="text-3xl font-bold mb-1 whitespace-nowrap" style="color: #1a1a2e;">Network Setup</h2>
+            <p class="mb-4 text-center text-xl font-semibold whitespace-nowrap" style="color: #1a1a2e;">
                 Scan QR code to configure WiFi
             </p>
 
             <!-- QR Code Section — minimal padding so QR fills the box -->
-            <div id="qrcode" class="bg-white p-3 rounded-xl shadow-lg mb-8"></div>
+            <div id="qrcode" class="bg-white p-3 rounded-xl shadow-lg mb-4"></div>
 
             <!-- Device Name -->
-            <p class="text-3xl font-bold mb-4" id="ap-ssid" style="color: #1a1a2e;">ODS Player</p>
+            <p class="text-2xl font-bold mb-3" id="ap-ssid" style="color: #1a1a2e;">ODS Player</p>
 
-            <!-- Instructions -->
-            <div class="mb-4" style="text-align: left; width: 100%; max-width: 380px;">
-                <p class="text-lg font-semibold mb-3" style="color: #1a1a2e; opacity: 0.85;">Steps:</p>
-                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 10px;">
+            <!-- Instructions — compact horizontal layout -->
+            <div class="flex gap-6 items-start" style="max-width: 480px;">
+                <div class="flex flex-col items-center text-center gap-1">
                     <span
-                        style="display: inline-flex; align-items: center; justify-content: center; min-width: 32px; height: 32px; background: #3c83f6; color: white; border-radius: 50%; font-size: 16px; font-weight: 700;">1</span>
-                    <span class="text-lg font-medium" style="color: #1a1a2e;">Scan QR code to connect</span>
+                        style="display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; background: #3c83f6; color: white; border-radius: 50%; font-size: 14px; font-weight: 700;">1</span>
+                    <span class="text-sm font-medium" style="color: #1a1a2e;">Scan QR code<br>to connect</span>
                 </div>
-                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 10px;">
+                <div class="flex flex-col items-center text-center gap-1">
                     <span
-                        style="display: inline-flex; align-items: center; justify-content: center; min-width: 32px; height: 32px; background: #3c83f6; color: white; border-radius: 50%; font-size: 16px; font-weight: 700;">2</span>
-                    <span class="text-lg font-medium" style="color: #1a1a2e;">Open your favorite browser</span>
+                        style="display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; background: #3c83f6; color: white; border-radius: 50%; font-size: 14px; font-weight: 700;">2</span>
+                    <span class="text-sm font-medium" style="color: #1a1a2e;">Open your<br>favorite browser</span>
                 </div>
-                <div style="display: flex; align-items: center; gap: 12px;">
+                <div class="flex flex-col items-center text-center gap-1">
                     <span
-                        style="display: inline-flex; align-items: center; justify-content: center; min-width: 32px; height: 32px; background: #3c83f6; color: white; border-radius: 50%; font-size: 16px; font-weight: 700;">3</span>
-                    <span class="text-lg font-medium" style="color: #1a1a2e;">Enter network info and connect</span>
+                        style="display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; background: #3c83f6; color: white; border-radius: 50%; font-size: 14px; font-weight: 700;">3</span>
+                    <span class="text-sm font-medium" style="color: #1a1a2e;">Enter info<br>and connect</span>
                 </div>
             </div>
         </div>
