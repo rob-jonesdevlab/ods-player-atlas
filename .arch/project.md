@@ -1,8 +1,8 @@
 # ODS Player OS Atlas — Architecture
 
-**Last Updated:** February 26, 2026  
-**Current Version:** v9-1-7-ORIGIN  
-**Status:** Production-ready P:0 → P:1 → P:2 pipeline — 7 root cause fixes, Chromium + Esper verified, clone auto-expand confirmed
+**Last Updated:** February 27, 2026  
+**Current Version:** v9-2-1-ORIGIN  
+**Status:** Production-ready P:0 → P:1 → P:2 pipeline — WiFi AP setup, QR pairing, signage-friendly UI, 3-state network indicators
 
 ---
 
@@ -87,16 +87,23 @@ See `.arch/image_processes.md` for detailed build commands and `.arch/build_guid
 - ✅ `brand/splash/generated/` — single source of truth for all splash assets
 - ✅ Enrollment race condition fix — lock file + `Restart=no` override during enrollment
 
-### Completed — v8-3 / v9 Terminology & Infrastructure
-- ✅ **Removed all "kiosk" terminology** — replaced with "player" naming
-- ✅ Overlay 4K→1080p resize fix — `convert -resize` before `display` for multi-res support
-- ✅ Deleted legacy v12 wrapper and start scripts (dead code)
-- ✅ Naming convention: boot files omit ATLAS tag (universal), OS-specific files include ATLAS
-- ✅ Directory consolidation — removed redundant `assets/plymouth/ods/`
-- ✅ 5-frame standard enforced across all splash animations
-- ✅ ODS-owned gate file (`/var/lib/ods/atlas_firstboot_pending`) — prevents Armbian first-login race
-- ✅ `set -e` replaced with `set -o pipefail` + ERR trap (logs line numbers instead of silent abort)
-- ✅ 12 systemd ODS services (was 9 — added enrollment retry, DPMS enforce timer, hide-tty)
+### Completed — v9.2 QR Setup & Signage UI Sprint
+- ✅ **WiFi AP mode** — hostapd/dnsmasq for phone-based network configuration
+- ✅ **QR code → WiFi join** — `WIFI:T:nopass;S:ODS-DEVICE-NAME;;` format
+- ✅ **Captive portal detection** — iOS/Android/Windows auto-redirect to setup.html
+- ✅ **AP stability** — kills `wpa_supplicant`, guards WiFi scan from disrupting AP mode
+- ✅ **AP config** — `country_code=US`, `ieee80211n=1`, channel 6, hidden SSID
+- ✅ **QR code → ODS Cloud deep link** — player_link.html pairing flow
+- ✅ **Rate limiting** — 5 pairing attempts per 10-minute window
+- ✅ **Signage-friendly UI** — high-contrast text (#1a1a2e), font-bold/semibold, all pages
+- ✅ **Dynamic card width** — `whitespace-nowrap` + `w-auto`, no text wrapping
+- ✅ **3-state network indicators** — Green (Primary), Blue (Standby), Amber (Disconnected)
+- ✅ **Default network toggle** — Radio buttons for primary/failover with localStorage persistence
+- ✅ **Ethernet auto-redirect** — null-safe poll skips network_setup when ethernet connected
+- ✅ **ALL CAPS device names** — reduces l/I confusion on signage
+- ✅ **QR code 380px** — large enough for phone scanning at distance
+- ✅ **Status pill** — `.90` vertical with glass-pill styling on all pages
+- ✅ Device name: `ods-setup-ap.sh` script (start/stop/status/ssid)
 
 ### 7 Root Cause Fixes (v9-1-0 → v9-1-7)
 
@@ -141,6 +148,8 @@ Complete lineage of every P:0 golden image ever built:
 | v9-1-5 | ORIGIN | 2/26/26 | Fix: NTP clock sync + Chromium retry with fresh apt update |
 | v9-1-6 | ORIGIN | 2/26/26 | Fix: Re-enable resize in inject (interim — replaced in v9-1-7) |
 | **v9-1-7** | **ORIGIN** | **2/26/26** | **Fix: `finalize_phase1()` re-enables resize service — proper fix. Clean P:0** |
+| v9-2-0 | ORIGIN | 2/27/26 | WiFi AP setup, QR network config, captive portal, signage-friendly UI |
+| **v9-2-1** | **ORIGIN** | **2/27/26** | **AP stability, dynamic card width, 3-state network indicators, ethernet auto-redirect** |
 
 ### Commit History (v8-v9)
 
@@ -163,12 +172,20 @@ Complete lineage of every P:0 golden image ever built:
 | v9-1-5 | `c568e7b` | NTP clock sync + Chromium retry with fresh `apt-get update` |
 | v9-1-6 | `bd7c668` | Re-enable resize in inject (interim bandaid) |
 | **v9-1-7** | **`054a3d0`** | **`finalize_phase1()` re-enables resize service — proper fix** |
+| v9-2-0 | `d11e8ad` | Network status 3-state indicators + default network toggle + signage fonts |
+| **v9-2-1** | **`b0eceb7`** | **AP stability, WiFi scan guard, dynamic card width, whitespace-nowrap** |
 
 ### Pending / Next Version
-- [x] P:0 golden image rebuild → **v9-1-7-ORIGIN**
+- [x] P:0 golden image rebuild → **v9-2-1-ORIGIN**
 - [x] Validate Esper enrollment end-to-end on fresh P:0 flash
 - [x] Validate Chromium installation with NTP clock sync
 - [x] Validate clone auto-expand on first boot
+- [x] WiFi AP phone-based network setup
+- [x] QR code → ODS Cloud pairing deep link
+- [x] Signage-friendly fonts (all pages)
+- [x] Dynamic card width (no text wrapping)
+- [x] 3-state network indicators + default network toggle
+- [x] Ethernet auto-redirect to player_link
 - [ ] ODS Cloud — Content delivery pipeline (cloud-sync, cache-manager)
 - [ ] OTA updates from ODS Cloud dashboard
 - [ ] Remote background/content push
@@ -199,6 +216,7 @@ Complete lineage of every P:0 golden image ever built:
 | `ods-enrollment-boot.sh` | Target device | Phase 2 enrollment (sealed splash, no Xorg) |
 | `generate_splash_frames.sh` | jdl-mini-box | Regenerates all splash PNGs from base watermark |
 | `ods-display-config.sh` | Target device | xrandr resolution configuration |
+| `ods-setup-ap.sh` | Target device | WiFi AP management (start/stop/status/ssid) |
 
 ## Key Patterns
 
@@ -219,6 +237,9 @@ Splash assets are 4K source. The boot wrapper detects resolution via `xrandr` an
 
 ### Credentials
 Device credentials are in `scripts/atlas_secrets.conf` (root: `0D5@dm!n`). Build server (jdl-mini-box) password: `mnbvcxz!!!`. Always check project docs before SSH attempts.
+
+### WiFi AP Setup (Phone Config)
+hostapd runs in AP mode on wlan0 with `country_code=US`, `ieee80211n=1`, channel 6, hidden SSID. AP start kills `wpa_supplicant` first (it fights hostapd for wlan0). WiFi scan endpoint guarded with `pgrep -x hostapd` to prevent disrupting AP mode. dnsmasq uses `except-interface=end0` (Pi5 Armbian ethernet name).
 
 ## Environment
 
