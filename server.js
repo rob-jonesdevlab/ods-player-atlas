@@ -67,26 +67,33 @@ app.get('/api/status', (req, res) => {
 
 // Scan for available WiFi networks
 app.get('/api/wifi/scan', (req, res) => {
-    // Bring wlan0 up first (Pi 5 boots with it DOWN), then scan with iw
-    exec('sudo ip link set wlan0 up 2>/dev/null; sleep 2; sudo iw dev wlan0 scan 2>/dev/null | grep -E "SSID:|signal:" | paste - - 2>/dev/null', { timeout: 25000 }, (error, stdout) => {
-        const networks = [];
-        if (stdout && stdout.trim()) {
-            const lines = stdout.trim().split('\n');
-            lines.forEach(line => {
-                const ssidMatch = line.match(/SSID:\s*(.+?)(?:\s|$)/);
-                const signalMatch = line.match(/signal:\s*(-?[\d.]+)/);
-                if (ssidMatch && ssidMatch[1] && ssidMatch[1] !== '\\x00') {
-                    networks.push({
-                        ssid: ssidMatch[1].trim(),
-                        signal: signalMatch ? parseFloat(signalMatch[1]) : -100
-                    });
-                }
-            });
+    // Guard: if AP mode is active (hostapd running), skip scan to avoid disrupting it
+    exec('pgrep -x hostapd', { timeout: 2000 }, (err) => {
+        if (!err) {
+            // hostapd is running — don't scan, it would kill the AP
+            return res.json({ networks: [], ap_active: true });
         }
-        // Deduplicate by SSID, keep strongest signal
-        const unique = [...new Map(networks.map(n => [n.ssid, n])).values()];
-        unique.sort((a, b) => b.signal - a.signal);
-        res.json({ networks: unique });
+        // Bring wlan0 up first (Pi 5 boots with it DOWN), then scan with iw
+        exec('sudo ip link set wlan0 up 2>/dev/null; sleep 2; sudo iw dev wlan0 scan 2>/dev/null | grep -E "SSID:|signal:" | paste - - 2>/dev/null', { timeout: 25000 }, (error, stdout) => {
+            const networks = [];
+            if (stdout && stdout.trim()) {
+                const lines = stdout.trim().split('\n');
+                lines.forEach(line => {
+                    const ssidMatch = line.match(/SSID:\s*(.+?)(?:\s|$)/);
+                    const signalMatch = line.match(/signal:\s*(-?[\d.]+)/);
+                    if (ssidMatch && ssidMatch[1] && ssidMatch[1] !== '\\x00') {
+                        networks.push({
+                            ssid: ssidMatch[1].trim(),
+                            signal: signalMatch ? parseFloat(signalMatch[1]) : -100
+                        });
+                    }
+                });
+            }
+            // Deduplicate by SSID, keep strongest signal
+            const unique = [...new Map(networks.map(n => [n.ssid, n])).values()];
+            unique.sort((a, b) => b.signal - a.signal);
+            res.json({ networks: unique });
+        });
     });
 });
 
