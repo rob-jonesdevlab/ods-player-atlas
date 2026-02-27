@@ -12,11 +12,23 @@ xhost +local: 2>/dev/null || true
 chown -R signage:signage /home/signage/.config/chromium 2>/dev/null
 rm -f /home/signage/.config/chromium/SingletonLock 2>/dev/null
 
-# Start WiFi AP for phone-based network setup (open network)
-sudo /usr/local/bin/ods-setup-ap.sh start 2>/dev/null || true
+# Determine startup page based on internet connectivity
+# If we have internet (ethernet or WiFi), skip network_setup entirely
+START_URL="http://localhost:8080/network_setup.html"
+
+if curl -sf --max-time 3 http://204.pop.ods-cloud.com/generate_204 >/dev/null 2>&1 || \
+   curl -sf --max-time 3 http://connectivitycheck.gstatic.com/generate_204 >/dev/null 2>&1; then
+    # Internet available — skip AP, go straight to player_link
+    echo "[ODS] Internet detected — skipping network_setup, loading player_link"
+    START_URL="http://localhost:8080/player_link.html"
+else
+    # No internet — start WiFi AP for phone-based network setup
+    echo "[ODS] No internet — starting AP for network setup"
+    sudo /usr/local/bin/ods-setup-ap.sh start 2>/dev/null || true
+fi
 
 exec chromium --no-sandbox \
-  --app="http://localhost:8080/network_setup.html" \
+  --app="$START_URL" \
   --start-maximized \
   --noerrdialogs \
   --disable-infobars \
