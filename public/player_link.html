@@ -173,20 +173,19 @@
     <!-- Error State -->
     <main id="errorState" class="flex-1 flex flex-col items-center justify-center w-full px-4 pb-44 z-10"
         style="display: none;">
-        <div class="glass-card rounded-2xl p-10 md:p-14 flex flex-col items-center shadow-2xl">
+        <div class="glass-card rounded-2xl p-10 md:p-14 flex flex-col items-center shadow-2xl w-auto">
             <div class="flex flex-col items-center gap-6 text-center">
                 <div
                     class="w-20 h-20 rounded-full bg-red-500/20 flex items-center justify-center border-2 border-red-500/30">
                     <span class="material-symbols-outlined text-5xl text-red-500">error</span>
                 </div>
                 <div>
-                    <h2 class="text-3xl font-bold mb-2" style="color: #1a1a2e;">Connection Error</h2>
-                    <p id="errorMessage" class="max-w-md text-lg" style="color: #1a1a2e; line-height: 1.4;">Unable to
-                        connect to pairing
-                        server at
+                    <h2 class="text-3xl font-bold mb-2 whitespace-nowrap" style="color: #1a1a2e;">Connection Error</h2>
+                    <p id="errorMessage" class="text-lg whitespace-nowrap" style="color: #1a1a2e; line-height: 1.4;">
+                        Unable to connect to pairing server at
                         <span class="font-mono bg-gray-100 px-2 py-1 rounded text-base">api.ods-cloud.com</span>
                     </p>
-                    <p class="mt-2 text-base" style="color: #1a1a2e; opacity: 0.7; line-height: 1.4;">
+                    <p class="mt-2 text-base whitespace-nowrap" style="color: #1a1a2e; opacity: 0.7; line-height: 1.4;">
                         Please check your network connection and ensure the server is reachable.</p>
                 </div>
                 <!-- Retry Button -->
@@ -204,17 +203,17 @@
     <!-- Cooldown State -->
     <main id="cooldownState" class="flex-1 flex flex-col items-center justify-center w-full px-4 pb-44 z-10"
         style="display: none;">
-        <div class="glass-card rounded-2xl p-10 md:p-14 flex flex-col items-center shadow-2xl">
+        <div class="glass-card rounded-2xl p-10 md:p-14 flex flex-col items-center shadow-2xl w-auto">
             <div class="flex flex-col items-center gap-6 text-center">
                 <div
                     class="w-20 h-20 rounded-full bg-amber-500/20 flex items-center justify-center border-2 border-amber-500/30">
                     <span class="material-symbols-outlined text-5xl text-amber-500">schedule</span>
                 </div>
                 <div>
-                    <h2 class="text-3xl font-bold mb-2" style="color: #1a1a2e;">Rate Limit Reached</h2>
-                    <p class="max-w-md text-lg" style="color: #1a1a2e; line-height: 1.4;">
-                        Too many pairing attempts. Please wait before trying again.
-                    </p>
+                    <h2 class="text-3xl font-bold mb-2 whitespace-nowrap" style="color: #1a1a2e;">Rate Limit Reached
+                    </h2>
+                    <p class="text-lg whitespace-nowrap" style="color: #1a1a2e; line-height: 1.4;">Too many pairing
+                        attempts. Please wait before trying again.</p>
                 </div>
                 <!-- Countdown Timer -->
                 <div class="flex flex-col items-center gap-2">
