@@ -168,13 +168,16 @@ app.post('/api/wifi/configure', (req, res) => {
     const { ssid, password } = req.body;
     if (!ssid) return res.status(400).json({ error: 'SSID required' });
 
-    // Build wpa_supplicant network block
-    const wpaConfig = password
+    // Build FULL wpa_supplicant.conf (header + network block)
+    // Must include ctrl_interface/update_config/country or wpa_supplicant won't connect
+    const wpaHeader = `ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev\nupdate_config=1\ncountry=US\n`;
+    const wpaNetwork = password
         ? `\nnetwork={\n    ssid="${ssid}"\n    psk="${password}"\n}\n`
         : `\nnetwork={\n    ssid="${ssid}"\n    key_mgmt=NONE\n}\n`;
+    const wpaFull = wpaHeader + wpaNetwork;
 
-    // Step 1: Write WiFi credentials
-    exec(`echo '${wpaConfig}' | sudo tee -a /etc/wpa_supplicant/wpa_supplicant.conf > /dev/null`, (error) => {
+    // Step 1: Write WiFi credentials (overwrite, not append — ensure clean config)
+    exec(`echo '${wpaFull}' | sudo tee /etc/wpa_supplicant/wpa_supplicant.conf > /dev/null`, (error) => {
         if (error) {
             return res.status(500).json({ error: 'Failed to configure WiFi' });
         }
