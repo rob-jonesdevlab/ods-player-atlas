@@ -327,7 +327,7 @@ ieee80211n=1
 wmm_enabled=0
 macaddr_acl=0
 auth_algs=1
-ignore_broadcast_ssid=0
+ignore_broadcast_ssid=1
 max_num_sta=5
 EOF
 
