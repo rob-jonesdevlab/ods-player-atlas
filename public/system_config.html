@@ -298,49 +298,91 @@
                     <h3 class="text-lg font-semibold">Network Status</h3>
                     <span class="text-sm text-slate-300" id="net-refresh-label">Auto-refreshing</span>
                 </div>
-                <!-- Ethernet Row -->
-                <div class="flex items-center justify-between p-3 rounded-lg bg-slate-700/30 mb-3">
-                    <div class="flex items-center gap-3">
-                        <span id="eth-indicator"
-                            class="w-3 h-3 rounded-full bg-slate-500 ring-2 ring-slate-500/30"></span>
-                        <div>
-                            <span class="text-base font-medium text-white">Ethernet</span>
-                            <p id="eth-status" class="text-sm text-slate-300">Checking...</p>
-                            <p id="eth-role" class="text-xs text-slate-400 mt-0.5"></p>
-                        </div>
-                    </div>
-                    <label class="flex items-center gap-2 cursor-pointer">
-                        <input type="radio" name="default-network" value="ethernet" id="default-eth"
-                            class="accent-primary w-4 h-4" onchange="setDefaultNetwork('ethernet')">
-                        <span class="text-sm text-slate-200">Default</span>
-                    </label>
-                </div>
-                <!-- WiFi Row -->
-                <div class="flex items-center justify-between p-3 rounded-lg bg-slate-700/30 mb-4">
-                    <div class="flex items-center gap-3">
-                        <span id="wifi-indicator"
-                            class="w-3 h-3 rounded-full bg-slate-500 ring-2 ring-slate-500/30"></span>
-                        <div>
-                            <span class="text-base font-medium text-white">WiFi</span>
-                            <p id="wifi-conn-status" class="text-sm text-slate-300">Checking...</p>
-                            <p id="wifi-role" class="text-xs text-slate-400 mt-0.5"></p>
-                        </div>
-                    </div>
-                    <label class="flex items-center gap-2 cursor-pointer">
-                        <input type="radio" name="default-network" value="wifi" id="default-wifi"
-                            class="accent-primary w-4 h-4" onchange="setDefaultNetwork('wifi')">
-                        <span class="text-sm text-slate-200">Default</span>
-                    </label>
-                </div>
-                <!-- IP / DNS row -->
+                <!-- Side-by-side Ethernet / WiFi cards -->
                 <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <span class="text-base text-slate-200">IP Address</span>
-                        <p id="ip-address" class="text-base font-medium stat-value">—</p>
+                    <!-- Ethernet Card -->
+                    <div class="rounded-lg bg-slate-700/30 p-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="flex items-center gap-2">
+                                <span id="eth-indicator"
+                                    class="w-3 h-3 rounded-full bg-slate-500 ring-2 ring-slate-500/30"></span>
+                                <span class="text-base font-semibold text-white">Ethernet</span>
+                            </div>
+                            <label class="flex items-center gap-1.5 cursor-pointer">
+                                <input type="radio" name="default-network" value="ethernet" id="default-eth"
+                                    class="accent-primary w-3.5 h-3.5" onchange="setDefaultNetwork('ethernet')">
+                                <span class="text-xs text-slate-300">Default</span>
+                            </label>
+                        </div>
+                        <div class="flex items-center gap-2 mb-3">
+                            <span id="eth-status" class="text-sm text-slate-300">Checking...</span>
+                            <span id="eth-role" class="text-xs"></span>
+                        </div>
+                        <div class="space-y-2 text-sm border-t border-slate-600/50 pt-3">
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">IP Address</span>
+                                <span id="eth-ip" class="text-slate-200 font-mono">—</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">Subnet</span>
+                                <span id="eth-subnet" class="text-slate-200 font-mono">—</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">Gateway</span>
+                                <span id="eth-gateway" class="text-slate-200 font-mono">—</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">DNS</span>
+                                <span id="eth-dns" class="text-slate-200 font-mono text-xs">—</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-slate-400">Type</span>
+                                <span id="eth-type"
+                                    class="px-2 py-0.5 rounded text-xs font-medium bg-emerald-500/20 text-emerald-400">DHCP</span>
+                            </div>
+                        </div>
                     </div>
-                    <div>
-                        <span class="text-base text-slate-200">DNS</span>
-                        <p id="dns-info" class="text-base font-medium stat-value">—</p>
+                    <!-- WiFi Card -->
+                    <div class="rounded-lg bg-slate-700/30 p-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="flex items-center gap-2">
+                                <span id="wifi-indicator"
+                                    class="w-3 h-3 rounded-full bg-slate-500 ring-2 ring-slate-500/30"></span>
+                                <span class="text-base font-semibold text-white">WiFi</span>
+                            </div>
+                            <label class="flex items-center gap-1.5 cursor-pointer">
+                                <input type="radio" name="default-network" value="wifi" id="default-wifi"
+                                    class="accent-primary w-3.5 h-3.5" onchange="setDefaultNetwork('wifi')">
+                                <span class="text-xs text-slate-300">Default</span>
+                            </label>
+                        </div>
+                        <div class="flex items-center gap-2 mb-3">
+                            <span id="wifi-conn-status" class="text-sm text-slate-300">Checking...</span>
+                            <span id="wifi-role" class="text-xs"></span>
+                        </div>
+                        <div class="space-y-2 text-sm border-t border-slate-600/50 pt-3">
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">IP Address</span>
+                                <span id="wifi-ip" class="text-slate-200 font-mono">—</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">Subnet</span>
+                                <span id="wifi-subnet" class="text-slate-200 font-mono">—</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">Gateway</span>
+                                <span id="wifi-gateway" class="text-slate-200 font-mono">—</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">DNS</span>
+                                <span id="wifi-dns" class="text-slate-200 font-mono text-xs">—</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-slate-400">Type</span>
+                                <span id="wifi-type"
+                                    class="px-2 py-0.5 rounded text-xs font-medium bg-emerald-500/20 text-emerald-400">DHCP</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -871,19 +913,47 @@
                 const ethIsPrimary = (defaultNetwork === 'ethernet');
                 const wifiIsPrimary = (defaultNetwork === 'wifi');
 
-                // Ethernet
+                // Ethernet status + indicator
                 document.getElementById('eth-status').textContent = ethConnected ? 'Connected' : 'Disconnected';
                 document.getElementById('eth-indicator').className = getIndicatorClasses(ethConnected, ethIsPrimary);
                 const ethRole = document.getElementById('eth-role');
                 ethRole.textContent = getRoleText(ethConnected, ethIsPrimary);
                 ethRole.style.cssText = getRoleColor(ethConnected, ethIsPrimary);
 
-                // WiFi
+                // Ethernet per-interface details
+                if (data.ethernet) {
+                    const e = data.ethernet;
+                    document.getElementById('eth-ip').textContent = e.ip || '—';
+                    document.getElementById('eth-subnet').textContent = e.subnet ? '/' + e.subnet : '—';
+                    document.getElementById('eth-gateway').textContent = e.gateway || '—';
+                    document.getElementById('eth-dns').textContent = e.dns || '—';
+                    const ethType = document.getElementById('eth-type');
+                    ethType.textContent = e.type || 'DHCP';
+                    ethType.className = e.type === 'Static'
+                        ? 'px-2 py-0.5 rounded text-xs font-medium bg-blue-500/20 text-blue-400'
+                        : 'px-2 py-0.5 rounded text-xs font-medium bg-emerald-500/20 text-emerald-400';
+                }
+
+                // WiFi status + indicator
                 document.getElementById('wifi-conn-status').textContent = wifiConnected ? (data.ssid || 'Connected') : 'Disconnected';
                 document.getElementById('wifi-indicator').className = getIndicatorClasses(wifiConnected, wifiIsPrimary);
                 const wifiRole = document.getElementById('wifi-role');
                 wifiRole.textContent = getRoleText(wifiConnected, wifiIsPrimary);
                 wifiRole.style.cssText = getRoleColor(wifiConnected, wifiIsPrimary);
+
+                // WiFi per-interface details
+                if (data.wifi) {
+                    const w = data.wifi;
+                    document.getElementById('wifi-ip').textContent = w.ip || '—';
+                    document.getElementById('wifi-subnet').textContent = w.subnet ? '/' + w.subnet : '—';
+                    document.getElementById('wifi-gateway').textContent = w.gateway || '—';
+                    document.getElementById('wifi-dns').textContent = w.dns || '—';
+                    const wifiType = document.getElementById('wifi-type');
+                    wifiType.textContent = w.type || 'DHCP';
+                    wifiType.className = w.type === 'Static'
+                        ? 'px-2 py-0.5 rounded text-xs font-medium bg-blue-500/20 text-blue-400'
+                        : 'px-2 py-0.5 rounded text-xs font-medium bg-emerald-500/20 text-emerald-400';
+                }
             } catch (e) { console.error('Network status error:', e); }
         }
 
@@ -900,8 +970,6 @@
                 document.getElementById('sys-ram').textContent = data.ram_usage || '—';
                 document.getElementById('sys-storage').textContent = (data.storage_usage || '—') + (data.disk_total ? ` of ${data.disk_total} disk` : '');
                 document.getElementById('sys-os').textContent = data.os_version || '—';
-                document.getElementById('ip-address').textContent = data.ip_address || '—';
-                document.getElementById('dns-info').textContent = data.dns || '—';
                 if (data.ram_percent) document.getElementById('sys-ram-bar').style.width = data.ram_percent + '%';
                 if (data.storage_percent) document.getElementById('sys-storage-bar').style.width = data.storage_percent + '%';
 
