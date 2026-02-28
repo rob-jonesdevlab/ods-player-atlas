@@ -659,6 +659,9 @@
             });
         }
 
+        let pairingRetries = 0;
+        const MAX_PAIRING_RETRIES = 3;
+
         async function initPairing() {
             try {
                 if (isInCooldown()) { showCooldown(); return; }
@@ -685,6 +688,7 @@
                     throw new Error(error.error || 'Failed to generate pairing code');
                 }
 
+                pairingRetries = 0; // Reset on success
                 const rateLimitState = incrementPairingCount();
                 const data = await response.json();
                 pairingCode = data.pairing_code;
@@ -705,7 +709,14 @@
                 initWebSocket();
             } catch (error) {
                 console.error('Init error:', error);
-                showError(`Error: ${error.message}`);
+                // Auto-retry on network errors (page may load before network is ready)
+                if (error.message === 'Failed to fetch' && pairingRetries < MAX_PAIRING_RETRIES) {
+                    pairingRetries++;
+                    updateStatus('#f97316', 'Waiting for network...', `Retry ${pairingRetries}/${MAX_PAIRING_RETRIES}`, true);
+                    setTimeout(() => initPairing(), 5000);
+                } else {
+                    showError(`Error: ${error.message}`);
+                }
             }
         }
 
