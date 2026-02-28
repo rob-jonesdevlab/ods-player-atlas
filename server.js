@@ -74,6 +74,8 @@ app.get('/api/status', (req, res) => {
                 const ethernet_connected = routeOutput.includes('eth0') || routeOutput.includes('end0');
                 const hasInternet = wifi_connected || ethernet_connected;
 
+                // Get per-interface IP details
+                const ethIface = routeOutput.includes('end0') ? 'end0' : 'eth0';
 
                 // Gather per-interface details in parallel
                 const getIfaceDetails = (iface, callback) => {
