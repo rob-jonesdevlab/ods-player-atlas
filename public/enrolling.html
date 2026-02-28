@@ -31,38 +31,38 @@
         }
 
         .logo {
-            width: 100px;
-            height: 100px;
-            margin: 0 auto 24px;
+            width: 120px;
+            height: 120px;
+            margin: 0 auto 32px;
             background: linear-gradient(135deg, #ff6b00, #ff8c33);
-            border-radius: 20px;
+            border-radius: 24px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 48px;
+            font-size: 60px;
             font-weight: 700;
         }
 
         h1 {
-            font-size: 28px;
-            font-weight: 600;
-            margin-bottom: 8px;
+            font-size: 48px;
+            font-weight: 700;
+            margin-bottom: 12px;
         }
 
         .subtitle {
-            font-size: 14px;
-            color: #888;
-            margin-bottom: 32px;
+            font-size: 24px;
+            color: #aaa;
+            margin-bottom: 40px;
         }
 
         .spinner {
-            border: 4px solid rgba(255, 107, 0, 0.2);
-            border-top: 4px solid #ff6b00;
+            border: 5px solid rgba(255, 107, 0, 0.2);
+            border-top: 5px solid #ff6b00;
             border-radius: 50%;
-            width: 48px;
-            height: 48px;
+            width: 72px;
+            height: 72px;
             animation: spin 1s linear infinite;
-            margin: 24px auto;
+            margin: 32px auto;
         }
 
         @keyframes spin {
@@ -76,15 +76,15 @@
         }
 
         #status {
-            font-size: 14px;
-            color: #aaa;
-            min-height: 20px;
+            font-size: 24px;
+            color: #ccc;
+            min-height: 30px;
         }
 
         #retry-info {
-            font-size: 12px;
-            color: #666;
-            margin-top: 16px;
+            font-size: 18px;
+            color: #888;
+            margin-top: 20px;
         }
 
         .success {
@@ -100,11 +100,11 @@
         }
 
         .pairing-code {
-            font-size: 36px;
+            font-size: 56px;
             font-weight: 700;
-            letter-spacing: 6px;
+            letter-spacing: 8px;
             color: #ff6b00;
-            margin: 16px 0;
+            margin: 24px 0;
             font-family: monospace;
         }
     </style>
@@ -152,7 +152,7 @@
 
                         document.getElementById('pairing-display').innerHTML =
                             `<div class="pairing-code">${data.pairing_code}</div>` +
-                            `<p style="font-size:12px;color:#888">Enter this code in the ODS Cloud dashboard to pair</p>`;
+                            `<p style="font-size:18px;color:#aaa">Enter this code in the ODS Cloud dashboard to pair</p>`;
 
                         retryInfo.textContent = 'Waiting for pairing...';
 

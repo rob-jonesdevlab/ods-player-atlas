@@ -57,14 +57,15 @@
             box-sizing: border-box;
         }
 
+        /* Glass Card — high opacity for signage readability */
         .glass-card {
             background: linear-gradient(135deg,
-                    rgba(255, 255, 255, 0.88) 0%,
-                    rgba(255, 255, 255, 0.78) 50%,
-                    rgba(255, 255, 255, 0.85) 100%);
-            border: 1px solid rgba(255, 255, 255, 0.6);
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.06),
-                inset 0 1px 0 rgba(255, 255, 255, 0.8);
+                    rgba(255, 255, 255, 0.95) 0%,
+                    rgba(255, 255, 255, 0.92) 50%,
+                    rgba(255, 255, 255, 0.95) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.7);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15), 0 2px 8px rgba(0, 0, 0, 0.08),
+                inset 0 1px 0 rgba(255, 255, 255, 0.9);
         }
 
         .glass-pill {
@@ -131,37 +132,35 @@
         }
 
         .qr-label {
-            font-size: 0.8rem;
-            color: #1a1a2e;
-            opacity: 0.5;
+            font-size: 1.1rem;
+            color: #334155;
             text-transform: uppercase;
             letter-spacing: 0.1em;
             font-weight: 600;
         }
 
         .heading-main {
-            font-size: 2.5rem;
-            font-weight: 700;
-            color: #1a1a2e;
-            line-height: 1.2;
+            font-size: 3.5rem;
+            font-weight: 800;
+            color: #0f172a;
+            line-height: 1.15;
             margin-bottom: 0.5rem;
         }
 
         .heading-accent {
-            color: #3c83f6;
+            color: #2563eb;
         }
 
         .heading-sub {
-            font-size: 1.1rem;
-            color: #1a1a2e;
-            opacity: 0.6;
+            font-size: 1.4rem;
+            color: #334155;
             font-weight: 400;
             margin-bottom: 2rem;
         }
 
         .code-label {
-            font-size: 0.7rem;
-            color: #3c83f6;
+            font-size: 1rem;
+            color: #2563eb;
             font-weight: 700;
             letter-spacing: 0.15em;
             text-transform: uppercase;
@@ -215,21 +214,20 @@
         }
 
         .step-title {
-            font-size: 1.1rem;
+            font-size: 1.4rem;
             font-weight: 600;
-            color: #1a1a2e;
+            color: #0f172a;
             line-height: 1.3;
         }
 
         .step-title .url {
-            color: #3c83f6;
+            color: #2563eb;
             font-weight: 600;
         }
 
         .step-desc {
-            font-size: 0.85rem;
-            color: #1a1a2e;
-            opacity: 0.5;
+            font-size: 1.1rem;
+            color: #475569;
             margin-top: 0.15rem;
         }
 
@@ -267,14 +265,14 @@
         }
 
         .pill-text {
-            color: #111827;
-            font-weight: 500;
-            font-size: 1.05rem;
+            color: #0f172a;
+            font-weight: 600;
+            font-size: 1.2rem;
         }
 
         .pill-detail {
-            color: #111827;
-            font-size: 0.9rem;
+            color: #0f172a;
+            font-size: 1rem;
             opacity: 0.6;
         }
 
@@ -388,7 +386,7 @@
         <div class="glass-card state-card">
             <div class="spinner"></div>
             <div>
-                <h2 class="heading-main" style="font-size: 1.5rem; text-align: center;">Initializing device...</h2>
+                <h2 class="heading-main" style="font-size: 2.5rem; text-align: center;">Initializing device...</h2>
                 <p class="heading-sub" style="margin-bottom: 0; text-align: center;">Connecting to pairing server</p>
             </div>
         </div>
@@ -397,16 +395,8 @@
     <!-- Pairing State -->
     <main id="pairingState" class="main-content state-hidden">
         <div class="glass-card setup-card">
-            <!-- Left: QR Code -->
-            <div class="card-left">
-                <div class="qr-container" id="qrcodeContainer">
-                    <div id="qrcode"></div>
-                </div>
-                <span class="qr-label">Scan to pair instantly</span>
-            </div>
-
-            <!-- Right: Content -->
-            <div class="card-right">
+            <!-- Left: Text Content -->
+            <div class="card-left" style="align-items: flex-start !important;">
                 <h1 class="heading-main">Pair Your <span class="heading-accent">Device</span></h1>
                 <p class="heading-sub">Register this screen to your account</p>
 
@@ -438,6 +428,14 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Right: QR Code -->
+            <div class="card-right" style="align-items: center !important; justify-content: center !important;">
+                <div class="qr-container" id="qrcodeContainer">
+                    <div id="qrcode"></div>
+                </div>
+                <span class="qr-label">Scan to pair instantly</span>
+            </div>
         </div>
     </main>
 
@@ -445,17 +443,17 @@
     <main id="errorState" class="main-content state-hidden">
         <div class="glass-card state-card">
             <div class="icon-circle icon-circle-red">
-                <span class="material-symbols-outlined" style="font-size: 2.5rem; color: #ef4444;">error</span>
+                <span class="material-symbols-outlined" style="font-size: 3.5rem; color: #ef4444;">error</span>
             </div>
             <div>
-                <h2 class="heading-main" style="font-size: 1.5rem; text-align: center;">Connection Error</h2>
+                <h2 class="heading-main" style="font-size: 2.5rem; text-align: center;">Connection Error</h2>
                 <p id="errorMessage" class="heading-sub" style="margin-bottom: 0; text-align: center;">
                     Unable to connect to pairing server
                 </p>
             </div>
-            <button onclick="retryConnection()" class="retry-btn">
+            <button onclick="retryConnection()" class="retry-btn" style="font-size: 1.2rem; padding: 1rem 2.5rem;">
                 <span style="display: flex; align-items: center; gap: 0.5rem;">
-                    <span class="material-symbols-outlined" style="font-size: 1.25rem;">refresh</span>
+                    <span class="material-symbols-outlined" style="font-size: 1.5rem;">refresh</span>
                     Retry Connection
                 </span>
             </button>
@@ -466,23 +464,23 @@
     <main id="cooldownState" class="main-content state-hidden">
         <div class="glass-card state-card">
             <div class="icon-circle icon-circle-amber">
-                <span class="material-symbols-outlined" style="font-size: 2.5rem; color: #f59e0b;">schedule</span>
+                <span class="material-symbols-outlined" style="font-size: 3.5rem; color: #f59e0b;">schedule</span>
             </div>
             <div>
-                <h2 class="heading-main" style="font-size: 1.5rem; text-align: center;">Rate Limit Reached</h2>
+                <h2 class="heading-main" style="font-size: 2.5rem; text-align: center;">Rate Limit Reached</h2>
                 <p class="heading-sub" style="margin-bottom: 0; text-align: center;">
                     Too many attempts. Please wait before trying again.
                 </p>
             </div>
             <div style="display: flex; flex-direction: column; align-items: center; gap: 0.5rem;">
                 <span id="cooldownTimer"
-                    style="font-family: 'JetBrains Mono', monospace; font-size: 3.5rem; font-weight: 700; color: #f59e0b;">10:00</span>
-                <span style="font-size: 0.9rem; color: #1a1a2e; opacity: 0.6;">until next pairing attempt</span>
+                    style="font-family: 'JetBrains Mono', monospace; font-size: 4.5rem; font-weight: 700; color: #f59e0b;">10:00</span>
+                <span style="font-size: 1.2rem; color: #334155; font-weight: 500;">until next pairing attempt</span>
             </div>
             <div
-                style="width: 100%; max-width: 240px; background: rgba(26,26,46,0.08); border-radius: 9999px; height: 0.5rem; margin-top: 0.5rem;">
+                style="width: 100%; max-width: 300px; background: rgba(26,26,46,0.08); border-radius: 9999px; height: 0.625rem; margin-top: 0.5rem;">
                 <div id="cooldownProgress"
-                    style="background: #f59e0b; height: 0.5rem; border-radius: 9999px; width: 100%;"></div>
+                    style="background: #f59e0b; height: 0.625rem; border-radius: 9999px; width: 100%;"></div>
             </div>
         </div>
     </main>
