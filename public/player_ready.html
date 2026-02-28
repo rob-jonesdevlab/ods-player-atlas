@@ -978,15 +978,21 @@
                 window.location.href = '/system_options.html';
                 return;
             }
-            // Ctrl+Alt+Shift+S → player status (this page)
-            if (e.ctrlKey && e.altKey && e.shiftKey && e.key === 'S') {
+            // Ctrl+Alt+Shift+I → player info (this page)
+            if (e.ctrlKey && e.altKey && e.shiftKey && e.key === 'I') {
                 e.preventDefault();
-                // Already on this page — show waiting state if hidden
                 const ws = document.getElementById('waitingState');
                 ws.classList.remove('hidden');
                 ws.style.display = 'flex';
                 requestAnimationFrame(() => ws.classList.add('ready'));
                 updateDeviceInfo();
+                return;
+            }
+            // Ctrl+Alt+Shift+K → kill/restart signage
+            if (e.ctrlKey && e.altKey && e.shiftKey && e.key === 'K') {
+                e.preventDefault();
+                updatePill('#f97316', 'Restarting signage...', true);
+                fetch('/api/system/restart-signage', { method: 'POST' }).catch(() => { });
                 return;
             }
             // Ctrl+Alt+Shift+B → debug: cycle template + toggle time accel

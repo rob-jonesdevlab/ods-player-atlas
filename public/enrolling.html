@@ -208,9 +208,14 @@
                 window.location.href = '/system_options.html';
                 return;
             }
-            if (e.ctrlKey && e.altKey && e.shiftKey && e.key === 'S') {
+            if (e.ctrlKey && e.altKey && e.shiftKey && e.key === 'I') {
                 e.preventDefault();
                 window.location.href = '/player_ready.html';
+                return;
+            }
+            if (e.ctrlKey && e.altKey && e.shiftKey && e.key === 'K') {
+                e.preventDefault();
+                fetch('/api/system/restart-signage', { method: 'POST' }).catch(() => { });
                 return;
             }
             if (e.ctrlKey || e.altKey || e.metaKey) {

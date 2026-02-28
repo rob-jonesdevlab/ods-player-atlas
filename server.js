@@ -444,6 +444,13 @@ app.get('/api/system/info', (req, res) => {
 });
 
 // System actions
+// Restart signage — kills Chromium so systemd relaunches it (Ctrl+Alt+Shift+K)
+app.post('/api/system/restart-signage', (req, res) => {
+    console.log('[SYSTEM] Restart signage requested');
+    res.json({ success: true, message: 'Restarting signage...' });
+    setTimeout(() => exec('pkill -9 chromium'), 500);
+});
+
 app.post('/api/system/reboot', (req, res) => {
     res.json({ success: true, message: 'Rebooting...' });
     setTimeout(() => exec('sudo /usr/sbin/reboot'), 2000);
