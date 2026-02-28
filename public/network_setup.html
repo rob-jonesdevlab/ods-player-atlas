@@ -316,8 +316,8 @@
                 <h1 class="heading-main">Network <span class="heading-accent">Setup</span></h1>
                 <p class="heading-sub">Connect this player to your WiFi network</p>
 
-                <p class="ssid-label">Device Name</p>
-                <div class="ssid-value" id="ap-ssid">ODS Player</div>
+                <p class="ssid-label">HOSTNAME</p>
+                <div class="ssid-value" id="ap-ssid">Loading...</div>
 
                 <div class="step-list">
                     <div class="step-item">
@@ -401,7 +401,9 @@
                 img.style.display = 'block';
                 document.getElementById('qrcode').appendChild(img);
                 if (data.ssid) {
-                    document.getElementById('ap-ssid').textContent = data.ssid;
+                    // Strip 'ODS-' prefix — display just the hostname
+                    const hostname = data.ssid.replace(/^ODS-/i, '');
+                    document.getElementById('ap-ssid').textContent = hostname;
                 }
             })
             .catch(err => console.error('QR Error:', err));

@@ -189,36 +189,52 @@ app.post('/api/wifi/configure', (req, res) => {
         // Step 3: Async — stop AP and switch wlan0 to client mode (phone disconnects here)
         console.log(`[WiFi] Credentials saved for "${ssid}" — stopping AP in 2s...`);
         setTimeout(() => {
-            // Step 3a: Stop the AP service (kills hostapd/dnsmasq, frees wlan0)
-            exec('sudo systemctl stop ods-setup-ap', { timeout: 10000 }, () => {
-                console.log('[WiFi] AP stopped — switching wlan0 to client mode');
+            // Bypass systemctl stop ods-setup-ap — its stop handler brings wlan0 DOWN
+            // and starts wpa_supplicant in D-Bus mode (no -i wlan0), which doesn't work.
+            // Instead, we directly kill hostapd/dnsmasq and manage wlan0 ourselves.
+            const teardown = [
+                'sudo killall hostapd 2>/dev/null',
+                'sudo killall dnsmasq 2>/dev/null',
+                'sudo killall wpa_supplicant 2>/dev/null',
+                'sudo ip addr flush dev wlan0 2>/dev/null',
+                'sleep 1',
+                'sudo ip link set wlan0 up',
+                'sleep 1',
+                'sudo wpa_supplicant -B -i wlan0 -c /etc/wpa_supplicant/wpa_supplicant.conf'
+            ].join(' ; ');
 
-                // Step 3b: Start wpa_supplicant on wlan0 with saved credentials
-                // The systemd service uses D-Bus mode (-u -s) without -i wlan0, so we run it directly
-                const wpaCmd = 'sudo ip link set wlan0 up 2>/dev/null; sudo wpa_supplicant -B -i wlan0 -c /etc/wpa_supplicant/wpa_supplicant.conf 2>/dev/null';
-                exec(wpaCmd, { timeout: 10000 }, () => {
-                    console.log('[WiFi] wpa_supplicant started — waiting for association...');
+            exec(teardown, { timeout: 15000 }, (err, stdout, stderr) => {
+                console.log(`[WiFi] AP torn down, wpa_supplicant started. stdout: ${(stdout || '').trim()}, stderr: ${(stderr || '').trim()}`);
 
-                    // Step 3c: Wait 8s for WPA association, then reconfigure + DHCP
-                    setTimeout(() => {
+                // Wait 10s for WPA association
+                setTimeout(() => {
+                    exec('sudo wpa_cli -i wlan0 status 2>/dev/null', { timeout: 5000 }, (e, statusOut) => {
+                        console.log(`[WiFi] wpa_cli status: ${(statusOut || '').trim().replace(/\n/g, ' | ')}`);
+
+                        // Reconfigure to make sure it picks up the saved credentials
                         exec('sudo wpa_cli -i wlan0 reconfigure 2>/dev/null', { timeout: 5000 }, () => {
-                            // Step 3d: Get IP via busybox udhcpc (dhclient is not installed)
+                            // Wait 5s more for association after reconfigure
                             setTimeout(() => {
-                                exec('busybox udhcpc -i wlan0 -n -q 2>/dev/null', { timeout: 15000 }, () => {
-                                    console.log('[WiFi] DHCP request sent');
+                                // Get IP via busybox udhcpc
+                                exec('sudo busybox udhcpc -i wlan0 -n -q 2>/dev/null', { timeout: 15000 }, (dhcpErr, dhcpOut) => {
+                                    console.log(`[WiFi] DHCP result: ${(dhcpOut || '').trim()}`);
 
-                                    // Step 4: Verify connection
+                                    // Final verify after 5s
                                     setTimeout(() => {
-                                        exec('wpa_cli -i wlan0 status | grep wpa_state', (err, stdout) => {
-                                            const state = (stdout || '').trim();
-                                            const connected = state.includes('COMPLETED');
-                                            if (connected) {
-                                                exec('iwgetid -r', (e, ssidOut) => {
-                                                    console.log(`[WiFi] Connected! State: ${state}, SSID: ${(ssidOut || '').trim()}`);
-                                                });
+                                        exec('sudo wpa_cli -i wlan0 status 2>/dev/null', (err, finalStatus) => {
+                                            const lines = (finalStatus || '');
+                                            const stateMatch = lines.match(/wpa_state=(\S+)/);
+                                            const ssidMatch = lines.match(/ssid=(\S+)/);
+                                            const ipMatch = lines.match(/ip_address=(\S+)/);
+                                            const state = stateMatch ? stateMatch[1] : 'UNKNOWN';
+                                            const connSsid = ssidMatch ? ssidMatch[1] : 'none';
+                                            const ip = ipMatch ? ipMatch[1] : 'no ip';
+
+                                            if (state === 'COMPLETED') {
+                                                console.log(`[WiFi] ✓ Connected to "${connSsid}" (IP: ${ip})`);
                                             } else {
-                                                console.log(`[WiFi] Connection failed (state: ${state}) — restarting AP`);
-                                                exec('killall wpa_supplicant 2>/dev/null; sudo systemctl start ods-setup-ap', (e) => {
+                                                console.log(`[WiFi] ✗ Failed — state=${state}, ssid=${connSsid}. Restarting AP...`);
+                                                exec('sudo killall wpa_supplicant 2>/dev/null; sudo systemctl start ods-setup-ap', (e) => {
                                                     if (e) console.error('[WiFi] Failed to restart AP:', e.message);
                                                     else console.log('[WiFi] AP restarted — user can try again');
                                                 });
@@ -226,10 +242,10 @@ app.post('/api/wifi/configure', (req, res) => {
                                         });
                                     }, 5000);
                                 });
-                            }, 3000);
+                            }, 5000);
                         });
-                    }, 8000);
-                });
+                    });
+                }, 10000);
             });
         }, 2000);  // 2s delay gives phone time to receive response
     });
