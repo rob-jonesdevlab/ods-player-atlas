@@ -509,6 +509,9 @@
             if (e.ctrlKey && e.altKey && e.shiftKey && e.key === 'O') {
                 e.preventDefault(); window.location.href = '/system_options.html'; return;
             }
+            if (e.ctrlKey && e.altKey && e.shiftKey && e.key === 'S') {
+                e.preventDefault(); window.location.href = '/player_ready.html'; return;
+            }
             if (e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) {
                 e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); return false;
             }

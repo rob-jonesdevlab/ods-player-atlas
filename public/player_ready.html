@@ -111,6 +111,24 @@
             max-width: 600px;
             padding: 40px;
             margin-top: 10vh;
+            border-radius: 1.5rem;
+            transition: background 0.4s ease, box-shadow 0.4s ease;
+        }
+
+        /* Smokey glass card — activated when wallpaper is set */
+        .waiting-state.has-wallpaper {
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+        }
+
+        .waiting-state.has-wallpaper .waiting-container {
+            background: rgba(10, 10, 10, 0.65);
+            backdrop-filter: blur(24px) saturate(1.2);
+            -webkit-backdrop-filter: blur(24px) saturate(1.2);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            padding: 48px 56px;
         }
 
         .logo {
@@ -459,8 +477,8 @@
                     <span class="info-value" id="infoNetwork">Checking...</span>
                 </div>
                 <div class="info-row">
-                    <span class="info-label">ODS Cloud</span>
-                    <span class="info-value" id="infoCloud">Connecting...</span>
+                    <span class="info-label">Status</span>
+                    <span class="info-value" id="infoCloud">Offline</span>
                 </div>
             </div>
 
@@ -539,9 +557,9 @@
                 hasConnected = true;
                 updatePill('#14b8a6', 'Connected to ODS Cloud');
                 clearOfflineBorder();
-                // Update cloud status in info table
+                // Update status in info table
                 const cloudEl = document.getElementById('infoCloud');
-                if (cloudEl) { cloudEl.textContent = 'Connected'; cloudEl.className = 'info-value connected'; }
+                if (cloudEl) { cloudEl.textContent = 'Online'; cloudEl.className = 'info-value connected'; }
 
                 // Register this player
                 socket.emit('register', {
@@ -579,7 +597,7 @@
                 updatePill('#ef4444', 'Disconnected');
                 startOfflineBorder();
                 const cloudEl = document.getElementById('infoCloud');
-                if (cloudEl) { cloudEl.textContent = 'Reconnecting...'; cloudEl.className = 'info-value disconnected'; }
+                if (cloudEl) { cloudEl.textContent = 'Offline'; cloudEl.className = 'info-value disconnected'; }
             });
 
             socket.on('connect_error', (err) => {
@@ -588,7 +606,7 @@
                 updatePill('#f97316', label, true);
                 startOfflineBorder();
                 const cloudEl = document.getElementById('infoCloud');
-                if (cloudEl) { cloudEl.textContent = label; cloudEl.className = 'info-value'; }
+                if (cloudEl) { cloudEl.textContent = 'Offline'; cloudEl.className = 'info-value disconnected'; }
             });
         }
 
@@ -665,7 +683,6 @@
                     if (typeof tpl === 'number' && tpl >= 0 && tpl < OFFLINE_TEMPLATES.length) {
                         applyTemplate(tpl);
                     }
-                    // Future: custom_colors override
                     if (config.offline_border.custom_colors && config.offline_border.custom_colors.length === 4) {
                         const cc = config.offline_border.custom_colors;
                         const root = document.documentElement.style;
@@ -674,6 +691,11 @@
                         root.setProperty('--ob-stage3', cc[2]);
                         root.setProperty('--ob-stage4', cc[3]);
                     }
+                }
+
+                // Apply appearance (wallpaper, card style)
+                if (config.appearance) {
+                    applyAppearance(config.appearance);
                 }
 
                 // Report sync status
@@ -951,9 +973,20 @@
 
         // ─── Keyboard Lockdown ───
         document.addEventListener('keydown', (e) => {
-            // Ctrl+Alt+Shift+O → system config
+            // Ctrl+Alt+Shift+O → system options
             if (e.ctrlKey && e.altKey && e.shiftKey && e.key === 'O') {
                 window.location.href = '/system_options.html';
+                return;
+            }
+            // Ctrl+Alt+Shift+S → player status (this page)
+            if (e.ctrlKey && e.altKey && e.shiftKey && e.key === 'S') {
+                e.preventDefault();
+                // Already on this page — show waiting state if hidden
+                const ws = document.getElementById('waitingState');
+                ws.classList.remove('hidden');
+                ws.style.display = 'flex';
+                requestAnimationFrame(() => ws.classList.add('ready'));
+                updateDeviceInfo();
                 return;
             }
             // Ctrl+Alt+Shift+B → debug: cycle template + toggle time accel
@@ -961,7 +994,7 @@
                 e.preventDefault();
                 debugMode = true;
                 activeTemplateIndex = (activeTemplateIndex + 1) % OFFLINE_TEMPLATES.length;
-                debugTimeMultiplier = 60;  // 60× = 1 hour per minute
+                debugTimeMultiplier = 60;
                 applyTemplate(activeTemplateIndex);
                 if (!offlineStart) offlineStart = Date.now();
                 updateOfflineBorder();
@@ -999,11 +1032,28 @@
                 .catch(() => { });
         }
 
+        // ─── Appearance — Wallpaper & Glass Card ───
+        function applyAppearance(appearance) {
+            const ws = document.getElementById('waitingState');
+            if (!ws) return;
+
+            if (appearance.wallpaper) {
+                // Check if wallpaper is available locally or use URL
+                const wallpaperUrl = appearance.wallpaper;
+                ws.style.backgroundImage = `url('${wallpaperUrl}')`;
+                ws.classList.add('has-wallpaper');
+                console.log('[Appearance] Wallpaper applied:', wallpaperUrl);
+            } else {
+                ws.style.backgroundImage = '';
+                ws.classList.remove('has-wallpaper');
+            }
+        }
+
         // ─── Init ───
         async function init() {
             document.body.classList.add('ready', 'locked');
             setStatus('syncing', 'connecting');
-            applyTemplate(0);  // Default template
+            applyTemplate(0);
             connectWebSocket();
             updateDeviceInfo();
             setInterval(updateDeviceInfo, 30000);  // Refresh device info every 30s
