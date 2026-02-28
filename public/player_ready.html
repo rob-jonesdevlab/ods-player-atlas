@@ -992,7 +992,16 @@
             if (e.ctrlKey && e.altKey && e.shiftKey && e.key === 'K') {
                 e.preventDefault();
                 updatePill('#f97316', 'Restarting signage...', true);
-                fetch('/api/system/restart-signage', { method: 'POST' }).catch(() => { });
+                console.log('[SHORTCUT] Ctrl+Alt+Shift+K — calling restart-signage');
+                // Use synchronous XHR to ensure it fires before any page unload
+                try {
+                    const xhr = new XMLHttpRequest();
+                    xhr.open('POST', '/api/system/restart-signage', false);
+                    xhr.send();
+                    console.log('[SHORTCUT] Restart response:', xhr.responseText);
+                } catch (err) {
+                    console.error('[SHORTCUT] Restart failed:', err);
+                }
                 return;
             }
             // Ctrl+Alt+Shift+B → debug: cycle template + toggle time accel
