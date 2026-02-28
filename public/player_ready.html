@@ -209,6 +209,10 @@
             color: #ef4444;
         }
 
+        .info-value.cached {
+            color: #ffffff;
+        }
+
         .info-value.uppercase {
             text-transform: uppercase;
         }
@@ -598,6 +602,8 @@
                 startOfflineBorder();
                 const cloudEl = document.getElementById('infoCloud');
                 if (cloudEl) { cloudEl.textContent = 'Offline'; cloudEl.className = 'info-value disconnected'; }
+                // Check if cached content is available for offline playback
+                checkCachedContent();
             });
 
             socket.on('connect_error', (err) => {
@@ -607,6 +613,8 @@
                 startOfflineBorder();
                 const cloudEl = document.getElementById('infoCloud');
                 if (cloudEl) { cloudEl.textContent = 'Offline'; cloudEl.className = 'info-value disconnected'; }
+                // Check if cached content is available for offline playback
+                checkCachedContent();
             });
         }
 
@@ -1071,6 +1079,30 @@
             }
         }
 
+        // ─── Cached Content Check ───
+        // If device is offline but has cached content, show 'Cached' pill and redirect to renderer
+        async function checkCachedContent() {
+            try {
+                const res = await fetch('/api/cache/status');
+                const cache = await res.json();
+                console.log('[Cache] Status:', cache);
+
+                if (cache.canOperate && cache.assetCount > 0) {
+                    // Has cached content — show Cached status
+                    updatePill('#ffffff', 'Cached content available', false);
+                    const cloudEl = document.getElementById('infoCloud');
+                    if (cloudEl) { cloudEl.textContent = 'Cached'; cloudEl.className = 'info-value cached'; }
+
+                    // TODO: When content renderer page is built, redirect after 3s:
+                    // setTimeout(() => { window.location.href = '/player_renderer.html'; }, 3000);
+                    return true;
+                }
+            } catch (err) {
+                console.log('[Cache] Check failed (server may be down):', err.message);
+            }
+            return false;
+        }
+
         // ─── Init ───
         async function init() {
             document.body.classList.add('ready', 'locked');
@@ -1088,6 +1120,9 @@
             setTimeout(async () => {
                 await fetchConfig();
             }, 2000);
+
+            // Check for cached content (runs in parallel — if offline but has cache, show it)
+            setTimeout(() => checkCachedContent(), 3000);
         }
 
         init();
