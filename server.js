@@ -163,6 +163,14 @@ app.get('/api/display/modes', (req, res) => {
     });
 });
 
+// WiFi connection state — polled by network_setup.html for status pill updates
+let wifiConnectionState = { stage: 'idle', message: '', ssid: '', ip: '' };
+
+// GET /api/wifi/connection-status — polled by status pill on network_setup page
+app.get('/api/wifi/connection-status', (req, res) => {
+    res.json(wifiConnectionState);
+});
+
 // Configure WiFi
 app.post('/api/wifi/configure', (req, res) => {
     const { ssid, password } = req.body;
@@ -179,19 +187,17 @@ app.post('/api/wifi/configure', (req, res) => {
     // Step 1: Write WiFi credentials (overwrite, not append — ensure clean config)
     exec(`echo '${wpaFull}' | sudo tee /etc/wpa_supplicant/wpa_supplicant.conf > /dev/null`, (error) => {
         if (error) {
+            wifiConnectionState = { stage: 'failed', message: 'Failed to save credentials', ssid, ip: '' };
             return res.status(500).json({ error: 'Failed to configure WiFi' });
         }
 
         // Step 2: RESPOND IMMEDIATELY — phone will lose AP connection when we stop hostapd
-        // The phone MUST get this response before we tear down the AP
+        wifiConnectionState = { stage: 'configuring', message: 'Config received...', ssid, ip: '' };
         res.json({ success: true, message: `Credentials saved. Connecting to ${ssid}...` });
 
         // Step 3: Async — stop AP and switch wlan0 to client mode (phone disconnects here)
         console.log(`[WiFi] Credentials saved for "${ssid}" — stopping AP in 2s...`);
         setTimeout(() => {
-            // Bypass systemctl stop ods-setup-ap — its stop handler brings wlan0 DOWN
-            // and starts wpa_supplicant in D-Bus mode (no -i wlan0), which doesn't work.
-            // Instead, we directly kill hostapd/dnsmasq and manage wlan0 ourselves.
             const teardown = [
                 'sudo killall hostapd 2>/dev/null',
                 'sudo killall dnsmasq 2>/dev/null',
@@ -203,8 +209,10 @@ app.post('/api/wifi/configure', (req, res) => {
                 'sudo wpa_supplicant -B -i wlan0 -c /etc/wpa_supplicant/wpa_supplicant.conf'
             ].join(' ; ');
 
+            wifiConnectionState = { stage: 'connecting', message: 'Connecting to network...', ssid, ip: '' };
+
             exec(teardown, { timeout: 15000 }, (err, stdout, stderr) => {
-                console.log(`[WiFi] AP torn down, wpa_supplicant started. stdout: ${(stdout || '').trim()}, stderr: ${(stderr || '').trim()}`);
+                console.log(`[WiFi] AP torn down, wpa_supplicant started. stdout: ${(stdout || '').trim()}`);
 
                 // Wait 10s for WPA association
                 setTimeout(() => {
@@ -215,7 +223,9 @@ app.post('/api/wifi/configure', (req, res) => {
                         exec('sudo wpa_cli -i wlan0 reconfigure 2>/dev/null', { timeout: 5000 }, () => {
                             // Wait 5s more for association after reconfigure
                             setTimeout(() => {
-                                // Get IP via busybox udhcpc
+                                wifiConnectionState = { stage: 'obtaining_ip', message: 'Obtaining IP address...', ssid, ip: '' };
+
+                                // Get IP via busybox udhcpc (script at /etc/udhcpc/default.script)
                                 exec('sudo busybox udhcpc -i wlan0 -n -q 2>/dev/null', { timeout: 15000 }, (dhcpErr, dhcpOut) => {
                                     console.log(`[WiFi] DHCP result: ${(dhcpOut || '').trim()}`);
 
@@ -228,16 +238,25 @@ app.post('/api/wifi/configure', (req, res) => {
                                             const ipMatch = lines.match(/ip_address=(\S+)/);
                                             const state = stateMatch ? stateMatch[1] : 'UNKNOWN';
                                             const connSsid = ssidMatch ? ssidMatch[1] : 'none';
-                                            const ip = ipMatch ? ipMatch[1] : 'no ip';
+                                            const ip = ipMatch ? ipMatch[1] : '';
 
                                             if (state === 'COMPLETED') {
                                                 console.log(`[WiFi] ✓ Connected to "${connSsid}" (IP: ${ip})`);
+                                                wifiConnectionState = { stage: 'connected', message: 'Connected', ssid: connSsid, ip };
                                             } else {
                                                 console.log(`[WiFi] ✗ Failed — state=${state}, ssid=${connSsid}. Restarting AP...`);
-                                                exec('sudo killall wpa_supplicant 2>/dev/null; sudo systemctl start ods-setup-ap', (e) => {
-                                                    if (e) console.error('[WiFi] Failed to restart AP:', e.message);
-                                                    else console.log('[WiFi] AP restarted — user can try again');
-                                                });
+                                                wifiConnectionState = { stage: 'failed', message: 'Connection failed', ssid, ip: '' };
+                                                // Wait 5s showing failure, then restart AP
+                                                setTimeout(() => {
+                                                    wifiConnectionState = { stage: 'restarting', message: 'Please try again...', ssid, ip: '' };
+                                                    exec('sudo killall wpa_supplicant 2>/dev/null; sudo systemctl start ods-setup-ap', (e) => {
+                                                        if (e) console.error('[WiFi] Failed to restart AP:', e.message);
+                                                        else console.log('[WiFi] AP restarted — user can try again');
+                                                        setTimeout(() => {
+                                                            wifiConnectionState = { stage: 'idle', message: '', ssid: '', ip: '' };
+                                                        }, 5000);
+                                                    });
+                                                }, 3000);
                                             }
                                         });
                                     }, 5000);

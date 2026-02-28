@@ -408,23 +408,59 @@
             })
             .catch(err => console.error('QR Error:', err));
 
-        // Poll for network connection
+        function updatePill(dotColor, text, pulse = false) {
+            const pill = document.querySelector('.pill');
+            if (!pill) return;
+            pill.innerHTML = `
+                <span class="dot-solid" style="background: ${dotColor}; ${pulse ? 'animation: pulse 1.5s infinite;' : ''}"></span>
+                <span class="pill-text">${text}</span>
+            `;
+        }
+
+        // Poll WiFi connection status for real-time pill updates
+        let wifiPollActive = false;
+        setInterval(async () => {
+            try {
+                const res = await fetch('/api/wifi/connection-status');
+                const cs = await res.json();
+                if (cs.stage === 'idle') {
+                    if (!wifiPollActive) return; // Don't overwrite default pill when idle before connect
+                    updatePill('#f59e0b', 'Waiting for network...', true);
+                    wifiPollActive = false;
+                } else if (cs.stage === 'configuring') {
+                    wifiPollActive = true;
+                    updatePill('#f59e0b', 'Config received...');
+                } else if (cs.stage === 'connecting') {
+                    wifiPollActive = true;
+                    updatePill('#f59e0b', 'Connecting to network...', true);
+                } else if (cs.stage === 'obtaining_ip') {
+                    wifiPollActive = true;
+                    updatePill('#f59e0b', 'Obtaining IP address...', true);
+                } else if (cs.stage === 'connected') {
+                    wifiPollActive = true;
+                    updatePill('#10b981', 'Connected');
+                    setTimeout(() => { window.location.href = '/player_link.html'; }, 3000);
+                } else if (cs.stage === 'failed') {
+                    wifiPollActive = true;
+                    updatePill('#ef4444', 'Connection failed');
+                } else if (cs.stage === 'restarting') {
+                    wifiPollActive = true;
+                    updatePill('#f59e0b', 'Please try again...', true);
+                }
+            } catch (e) { }
+        }, 1500);
+
+        // Also poll /api/status as fallback for ethernet detect
         setInterval(async () => {
             try {
                 const response = await fetch('/api/status');
                 const data = await response.json();
                 if (data.wifi_connected || data.ethernet_connected) {
-                    const pill = document.querySelector('.pill');
-                    if (pill) {
-                        pill.innerHTML = `
-                            <span class="dot-solid" style="background: #10b981;"></span>
-                            <span class="pill-text">Connected!</span>
-                        `;
-                    }
+                    updatePill('#10b981', 'Connected');
                     setTimeout(() => { window.location.href = '/player_link.html'; }, 3000);
                 }
             } catch (e) { }
-        }, 2000);
+        }, 3000);
     </script>
 </body>
 
