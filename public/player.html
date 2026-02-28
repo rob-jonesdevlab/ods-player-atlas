@@ -220,51 +220,6 @@
             }
         }
 
-        /* ─── Status Pill (bottom-right, minimal) ─── */
-        .status-pill {
-            position: fixed;
-            bottom: 16px;
-            right: 16px;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            padding: 6px 14px;
-            border-radius: 100px;
-            background: rgba(0, 0, 0, 0.5);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            z-index: 100;
-            opacity: 0.6;
-            transition: opacity 0.3s ease;
-        }
-
-        .status-pill:hover {
-            opacity: 1;
-        }
-
-        .status-pill .dot {
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            background: #10b981;
-        }
-
-        .status-pill .dot.offline {
-            background: #ef4444;
-        }
-
-        .status-pill .dot.syncing {
-            background: #f59e0b;
-            animation: pulse-dot 1.5s ease-in-out infinite;
-        }
-
-        .status-pill .label {
-            font-size: 11px;
-            font-weight: 500;
-            color: rgba(255, 255, 255, 0.6);
-            font-family: 'JetBrains Mono', monospace;
-        }
-
         /* ─── Progress Bar (thin, top edge) ─── */
         .slide-progress {
             position: fixed;
@@ -453,7 +408,7 @@
                     <span class="info-value" id="infoNetwork">Checking...</span>
                 </div>
                 <div class="info-row">
-                    <span class="info-label">Cloud</span>
+                    <span class="info-label">ODS Cloud</span>
                     <span class="info-value" id="infoCloud">Connecting...</span>
                 </div>
             </div>
@@ -474,11 +429,6 @@
     <!-- Debug Overlay -->
     <div class="offline-debug" id="offlineDebug"></div>
 
-    <!-- Status Pill -->
-    <div class="status-pill" id="statusPill">
-        <div class="dot" id="statusDot"></div>
-        <div class="label" id="statusLabel">connecting</div>
-    </div>
 
     <script>
         // ========================================
@@ -500,13 +450,8 @@
         let currentSlideIndex = 0;
         let assets = [];
 
-        // ─── Status Updates ───
-        function setStatus(state, label) {
-            const dot = document.getElementById('statusDot');
-            const lbl = document.getElementById('statusLabel');
-            dot.className = 'dot' + (state === 'offline' ? ' offline' : state === 'syncing' ? ' syncing' : '');
-            lbl.textContent = label || state;
-        }
+        // ─── Status Updates (pill removed — no-op to keep callers safe) ───
+        function setStatus(state, label) { /* no-op */ }
 
         // ─── Redirect if not paired ───
         if (!playerId && !deviceUuid) {

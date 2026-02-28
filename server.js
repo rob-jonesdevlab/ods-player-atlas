@@ -1,6 +1,7 @@
 const express = require('express');
 const { exec } = require('child_process');
 const fs = require('fs');
+const os = require('os');
 const QRCode = require('qrcode');
 const app = express();
 const PORT = 8080;
@@ -104,6 +105,7 @@ app.get('/api/status', (req, res) => {
                     getIfaceDetails(ethIface, (ethDetails) => {
                         getIfaceDetails('wlan0', (wifiDetails) => {
                             res.json({
+                                hostname: os.hostname(),
                                 wifi_connected,
                                 ethernet_connected,
                                 hasInternet,
