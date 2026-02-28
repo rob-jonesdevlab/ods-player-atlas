@@ -190,22 +190,72 @@
             color: #ef4444;
         }
 
-        .waiting-indicator {
+        .info-value.uppercase {
+            text-transform: uppercase;
+        }
+
+        /* ─── Status Pill (dark-themed, bottom-center) ─── */
+        .status-footer {
+            position: absolute;
+            width: 100%;
             display: flex;
-            align-items: center;
             justify-content: center;
-            gap: 14px;
-            margin-top: 56px;
-            color: #555;
+            z-index: 10;
+            top: 90%;
+            transform: translateY(-50%);
+        }
+
+        .glass-pill {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+        }
+
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.875rem 1.75rem;
+            border-radius: 9999px;
+        }
+
+        .dot-container {
+            position: relative;
+            width: 0.875rem;
+            height: 0.875rem;
+        }
+
+        .dot-ping {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 9999px;
+            background: #fbbf24;
+            opacity: 0.75;
+            animation: ping 1s cubic-bezier(0, 0, 0.2, 1) infinite;
+        }
+
+        .dot-solid {
+            position: relative;
+            width: 0.875rem;
+            height: 0.875rem;
+            border-radius: 9999px;
+            background: #f59e0b;
+        }
+
+        .pill-text {
+            color: rgba(255, 255, 255, 0.7);
+            font-weight: 600;
             font-size: 1.5rem;
         }
 
-        .waiting-indicator .dot {
-            width: 12px;
-            height: 12px;
-            background: #f59e0b;
-            border-radius: 50%;
-            animation: pulse-dot 2s ease-in-out infinite;
+        @keyframes ping {
+
+            75%,
+            100% {
+                transform: scale(2);
+                opacity: 0;
+            }
         }
 
         @keyframes pulse-dot {
@@ -397,7 +447,7 @@
                 </div>
                 <div class="info-row">
                     <span class="info-label">Hostname</span>
-                    <span class="info-value" id="infoHostname">Loading...</span>
+                    <span class="info-value uppercase" id="infoHostname">Loading...</span>
                 </div>
                 <div class="info-row">
                     <span class="info-label">IP Address</span>
@@ -413,12 +463,19 @@
                 </div>
             </div>
 
-            <div class="waiting-indicator">
-                <span class="dot"></span>
-                <span>Waiting for content from ODS Cloud</span>
-            </div>
         </div>
     </div>
+
+    <!-- Status Pill -->
+    <footer class="status-footer">
+        <div class="glass-pill pill" id="statusPill">
+            <span class="dot-container">
+                <span class="dot-ping"></span>
+                <span class="dot-solid"></span>
+            </span>
+            <span class="pill-text" id="pillText">Waiting for content...</span>
+        </div>
+    </footer>
 
     <!-- Slide Progress Bar -->
     <div class="slide-progress" id="slideProgress"></div>
@@ -450,8 +507,16 @@
         let currentSlideIndex = 0;
         let assets = [];
 
-        // ─── Status Updates (pill removed — no-op to keep callers safe) ───
-        function setStatus(state, label) { /* no-op */ }
+        // ─── Status Pill Updates ───
+        function updatePill(dotColor, text, pulse = false) {
+            const pill = document.getElementById('statusPill');
+            if (!pill) return;
+            pill.innerHTML = `
+                <span class="dot-solid" style="background: ${dotColor}; ${pulse ? 'animation: pulse-dot 1.5s infinite;' : ''}"></span>
+                <span class="pill-text">${text}</span>
+            `;
+        }
+        function setStatus(state, label) { /* legacy no-op */ }
 
         // ─── Redirect if not paired ───
         if (!playerId && !deviceUuid) {
@@ -469,7 +534,7 @@
 
             socket.on('connect', () => {
                 console.log('[WS] Connected');
-                setStatus('online', 'connected');
+                updatePill('#14b8a6', 'Connected to ODS Cloud');
                 clearOfflineBorder();
                 // Update cloud status in info table
                 const cloudEl = document.getElementById('infoCloud');
@@ -494,7 +559,7 @@
             // Real-time playlist deployment
             socket.on('deploy_playlist', async (data) => {
                 console.log('[WS] Playlist deployed:', data);
-                setStatus('syncing', 'syncing');
+                updatePill('#14b8a6', 'Content received...');
                 await fetchConfig();
             });
 
@@ -508,7 +573,7 @@
 
             socket.on('disconnect', () => {
                 console.log('[WS] Disconnected');
-                setStatus('offline', 'offline');
+                updatePill('#ef4444', 'Disconnected');
                 startOfflineBorder();
                 const cloudEl = document.getElementById('infoCloud');
                 if (cloudEl) { cloudEl.textContent = 'Disconnected'; cloudEl.className = 'info-value disconnected'; }
@@ -516,7 +581,7 @@
 
             socket.on('connect_error', (err) => {
                 console.error('[WS] Connection error:', err.message);
-                setStatus('offline', 'reconnecting');
+                updatePill('#f97316', 'Reconnecting...', true);
                 startOfflineBorder();
                 const cloudEl = document.getElementById('infoCloud');
                 if (cloudEl) { cloudEl.textContent = 'Reconnecting...'; cloudEl.className = 'info-value'; }
@@ -552,20 +617,24 @@
                 }
 
                 // Full config fetch
+                updatePill('#3b82f6', 'Updating configuration...');
                 const resp = await fetch(`${API_URL}/api/device/config/${deviceUuid}`);
                 if (!resp.ok) {
                     if (resp.status === 403) {
                         console.log('[Config] Device not paired yet');
+                        updatePill('#f59e0b', 'Waiting for content...', true);
                         showWaiting();
                         return;
                     }
                     console.error('[Config] Fetch failed:', resp.status);
+                    updatePill('#ef4444', 'Update failed!');
                     return;
                 }
 
                 const config = await resp.json();
                 currentConfig = config;
                 currentConfigHash = config.config_hash;
+                updatePill('#a855f7', 'Update complete...', true);
 
                 // Store player_id from config for WebSocket
                 if (config.player_id && !playerId) {
@@ -579,12 +648,12 @@
                 });
 
                 if (config.playlist && config.playlist.assets?.length > 0) {
+                    updatePill('#10b981', 'Ready');
                     await loadPlaylist(config.playlist);
                 } else {
+                    updatePill('#f59e0b', 'Waiting for content...', true);
                     showWaiting();
                 }
-
-                setStatus('online', 'connected');
 
                 // Apply offline border template from org config
                 if (config.offline_border) {
@@ -880,7 +949,7 @@
         document.addEventListener('keydown', (e) => {
             // Ctrl+Alt+Shift+O → system config
             if (e.ctrlKey && e.altKey && e.shiftKey && e.key === 'O') {
-                window.location.href = '/system_config.html';
+                window.location.href = '/system_options.html';
                 return;
             }
             // Ctrl+Alt+Shift+B → debug: cycle template + toggle time accel

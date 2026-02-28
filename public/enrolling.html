@@ -145,7 +145,7 @@
                         status.textContent = '✅ Device already paired!';
                         status.className = 'success';
                         retryInfo.textContent = 'Redirecting to player...';
-                        setTimeout(() => { window.location.href = '/player.html'; }, 2000);
+                        setTimeout(() => { window.location.href = '/player_ready.html'; }, 2000);
                     } else {
                         status.textContent = '✅ Registered! Pairing code:';
                         status.className = 'success';
@@ -190,7 +190,7 @@
                     document.getElementById('status').textContent = '✅ Paired successfully!';
                     document.getElementById('pairing-display').innerHTML = '';
                     document.getElementById('retry-info').textContent = 'Redirecting to player...';
-                    setTimeout(() => { window.location.href = '/player.html'; }, 2000);
+                    setTimeout(() => { window.location.href = '/player_ready.html'; }, 2000);
                 } else {
                     // Keep polling every 5 seconds
                     setTimeout(() => pollPairingStatus(deviceUuid), 5000);
@@ -205,7 +205,7 @@
         document.addEventListener('keydown', function (e) {
             if (e.ctrlKey && e.altKey && e.shiftKey && e.key === 'O') {
                 e.preventDefault();
-                window.location.href = '/system_config.html';
+                window.location.href = '/system_options.html';
                 return;
             }
             if (e.ctrlKey || e.altKey || e.metaKey) {

@@ -14,9 +14,9 @@ app.use(express.static('public'));
 // ========================================
 // When phones join the AP, they probe these URLs to detect captive portals.
 // iOS CNA does NOT execute JavaScript or follow meta-refresh redirects.
-// We serve setup.html directly so the form renders inside the CNA sheet.
+// We serve captive_portal.html directly so the form renders inside the CNA sheet.
 const path = require('path');
-const SETUP_PAGE = path.join(__dirname, 'public', 'setup.html');
+const SETUP_PAGE = path.join(__dirname, 'public', 'captive_portal.html');
 
 // iOS captive portal detection — serve setup page directly
 app.get('/hotspot-detect.html', (req, res) => {
@@ -41,7 +41,7 @@ app.get('/ncsi.txt', (req, res) => {
 
 // Catch-all for any captive portal probe from unknown OS
 app.get('/redirect', (req, res) => {
-    res.redirect('/setup.html');
+    res.redirect('/captive_portal.html');
 });
 
 // ========================================
@@ -298,7 +298,7 @@ app.get('/api/qr', async (req, res) => {
         // WIFI: QR format (open hidden network) — H:true tells phone the SSID is hidden
         const wifiQR = `WIFI:T:nopass;S:${ssid};H:true;;`;
         const qrCode = await QRCode.toDataURL(wifiQR, { width: 400 });
-        res.json({ qrCode, ssid, setupUrl: 'http://192.168.4.1:8080/setup.html' });
+        res.json({ qrCode, ssid, setupUrl: 'http://192.168.4.1:8080/captive_portal.html' });
     } catch (e) {
         console.error('[QR] Error:', e.message);
         res.status(500).json({ error: 'Failed to generate QR' });
@@ -931,7 +931,7 @@ app.post('/api/cache/clean', (req, res) => {
 });
 
 // ========================================
-// CONTENT DELIVERY APIs (for player.html renderer)
+// CONTENT DELIVERY APIs (for player_ready.html renderer)
 // ========================================
 
 const cloudSync = require('./player/cloud-sync');
