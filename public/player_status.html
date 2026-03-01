@@ -448,45 +448,41 @@
 </head>
 
 <body>
-    <!-- Content Canvas -->
-    <div class="player-canvas" id="playerCanvas"></div>
 
-    <!-- Waiting for Content -->
-    <div class="waiting-state" id="waitingState">
-        <div class="waiting-container">
-            <div class="logo">
-                <img src="/resources/ods-player-logo.png" alt="ODS" />
-            </div>
-            <div class="waiting-title">Otter Digital Signage</div>
-
-            <div class="info-table">
-                <div class="info-row">
-                    <span class="info-label">Account</span>
-                    <span class="info-value" id="infoAccount">Loading...</span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">Device</span>
-                    <span class="info-value" id="infoDevice">Loading...</span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">Hostname</span>
-                    <span class="info-value uppercase" id="infoHostname">Loading...</span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">IP Address</span>
-                    <span class="info-value" id="infoIp">Loading...</span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">Network</span>
-                    <span class="info-value" id="infoNetwork">Checking...</span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">Status</span>
-                    <span class="info-value" id="infoCloud">Offline</span>
-                </div>
-            </div>
-
+    <div class="waiting-container">
+        <div class="logo">
+            <img src="/resources/ods-player-logo.png" alt="ODS" />
         </div>
+        <div class="waiting-title">Otter Digital Signage</div>
+
+        <div class="info-table">
+            <div class="info-row">
+                <span class="info-label">Account</span>
+                <span class="info-value" id="infoAccount">Loading...</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Device</span>
+                <span class="info-value" id="infoDevice">Loading...</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Hostname</span>
+                <span class="info-value uppercase" id="infoHostname">Loading...</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">IP Address</span>
+                <span class="info-value" id="infoIp">Loading...</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Network</span>
+                <span class="info-value" id="infoNetwork">Checking...</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Status</span>
+                <span class="info-value" id="infoCloud">Offline</span>
+            </div>
+        </div>
+
+    </div>
     </div>
 
     <!-- Status Pill -->
@@ -500,8 +496,7 @@
         </div>
     </footer>
 
-    <!-- Slide Progress Bar -->
-    <div class="slide-progress" id="slideProgress"></div>
+
 
     <!-- Offline Border Overlay -->
     <div class="offline-border" id="offlineBorder"></div>
@@ -512,7 +507,7 @@
 
     <script>
         // ========================================
-        // ODS PLAYER — Content Renderer
+        // ODS PLAYER STATUS — Device Info & Redirect
         // ========================================
         const API_URL = 'https://api.ods-cloud.com';
         const CONFIG_POLL_INTERVAL = 30 * 1000;     // Check for config changes every 30s
@@ -525,10 +520,6 @@
         let socket = null;
         let currentConfig = null;
         let currentConfigHash = null;
-        let slideTimer = null;
-        let progressTimer = null;
-        let currentSlideIndex = 0;
-        let assets = [];
         let hasConnected = false; // Track if WS has ever connected
 
         // ─── Status Pill Updates ───
@@ -653,7 +644,6 @@
                     if (resp.status === 403) {
                         console.log('[Config] Device not paired yet');
                         updatePill('#f59e0b', 'Waiting for content...', true);
-                        showWaiting();
                         return;
                     }
                     console.error('[Config] Fetch failed:', resp.status);
@@ -683,7 +673,6 @@
                     setTimeout(() => { window.location.href = '/player_content_manager.html'; }, 3000);
                 } else {
                     updatePill('#f59e0b', 'Waiting for content...', true);
-                    showWaiting();
                 }
 
                 // Apply offline border template from org config
@@ -722,142 +711,7 @@
             }
         }
 
-        // ─── Playlist Rendering ───
-        function showWaiting() {
-            const ws = document.getElementById('waitingState');
-            ws.classList.remove('hidden');
-            ws.style.display = 'flex';
-            // Trigger opacity transition
-            requestAnimationFrame(() => ws.classList.add('ready'));
-            document.getElementById('playerCanvas').innerHTML = '';
-            document.getElementById('slideProgress').style.width = '0';
-            clearTimeout(slideTimer);
-            clearInterval(progressTimer);
-            assets = [];
-            currentSlideIndex = 0;
-        }
 
-        async function loadPlaylist(playlist) {
-            // Hide waiting state
-            document.getElementById('waitingState').classList.add('hidden');
-
-            assets = playlist.assets.sort((a, b) => a.order - b.order);
-            currentSlideIndex = 0;
-
-            if (assets.length === 0) {
-                showWaiting();
-                return;
-            }
-
-            // Pre-create slide elements
-            const canvas = document.getElementById('playerCanvas');
-            canvas.innerHTML = '';
-
-            assets.forEach((asset, i) => {
-                const slide = document.createElement('div');
-                slide.className = 'slide' + (i === 0 ? ' active' : '');
-                slide.id = `slide-${i}`;
-
-                if (asset.type === 'video') {
-                    const video = document.createElement('video');
-                    video.src = `${API_URL}${asset.url}`;
-                    video.autoplay = (i === 0);
-                    video.muted = true;
-                    video.loop = false;
-                    video.playsInline = true;
-                    video.preload = 'auto';
-                    video.addEventListener('ended', () => nextSlide());
-                    video.addEventListener('error', (e) => {
-                        console.error(`[Video] Error loading asset ${asset.id}:`, e);
-                        nextSlide();
-                    });
-                    slide.appendChild(video);
-                } else {
-                    // Image (default)
-                    const img = document.createElement('img');
-                    img.src = `${API_URL}${asset.url}`;
-                    img.alt = asset.filename || '';
-                    img.loading = (i < 2) ? 'eager' : 'lazy';
-                    img.addEventListener('error', (e) => {
-                        console.error(`[Image] Error loading asset ${asset.id}:`, e);
-                    });
-                    slide.appendChild(img);
-                }
-
-                canvas.appendChild(slide);
-            });
-
-            // Start slideshow
-            startSlideTimer();
-        }
-
-        function startSlideTimer() {
-            clearTimeout(slideTimer);
-            clearInterval(progressTimer);
-
-            const asset = assets[currentSlideIndex];
-            if (!asset) return;
-
-            const slide = document.getElementById(`slide-${currentSlideIndex}`);
-            const video = slide?.querySelector('video');
-
-            // For videos, let the 'ended' event handle transition
-            if (asset.type === 'video' && video) {
-                video.currentTime = 0;
-                video.play().catch(e => console.warn('[Video] Autoplay blocked:', e));
-                // Progress bar for video
-                const updateVideoProgress = () => {
-                    if (video.duration) {
-                        const pct = (video.currentTime / video.duration) * 100;
-                        document.getElementById('slideProgress').style.width = `${pct}%`;
-                    }
-                    if (!video.ended) requestAnimationFrame(updateVideoProgress);
-                };
-                requestAnimationFrame(updateVideoProgress);
-                return;
-            }
-
-            // For images, use duration timer
-            const duration = (asset.duration || 10) * 1000;
-            const progressBar = document.getElementById('slideProgress');
-            progressBar.style.transition = 'none';
-            progressBar.style.width = '0%';
-
-            // Trigger reflow then animate
-            requestAnimationFrame(() => {
-                progressBar.style.transition = `width ${duration}ms linear`;
-                progressBar.style.width = '100%';
-            });
-
-            slideTimer = setTimeout(() => nextSlide(), duration);
-        }
-
-        function nextSlide() {
-            const prevIndex = currentSlideIndex;
-            currentSlideIndex = (currentSlideIndex + 1) % assets.length;
-
-            // Pause previous video
-            const prevSlide = document.getElementById(`slide-${prevIndex}`);
-            const prevVideo = prevSlide?.querySelector('video');
-            if (prevVideo) prevVideo.pause();
-
-            // Transition
-            prevSlide?.classList.remove('active');
-            prevSlide?.classList.add('outgoing');
-
-            const nextSlideEl = document.getElementById(`slide-${currentSlideIndex}`);
-            nextSlideEl?.classList.add('active');
-
-            // Clean outgoing after transition
-            setTimeout(() => {
-                prevSlide?.classList.remove('outgoing');
-            }, 1200);
-
-            startSlideTimer();
-        }
-
-        // ─── Config Polling ───
-        setInterval(() => fetchConfig(), CONFIG_POLL_INTERVAL);
 
         // ========================================
         // OFFLINE BORDER SYSTEM

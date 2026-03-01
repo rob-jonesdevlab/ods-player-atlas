@@ -224,6 +224,7 @@
             }
         }
     </style>
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
 </head>
 
 <body>
@@ -249,12 +250,20 @@
         // ========================================
 
         const CONTENT_POLL_INTERVAL = 60 * 1000;  // Check for content updates every 60s
+        const HEARTBEAT_INTERVAL = 60 * 1000;       // Heartbeat every 60s
+        const RECONNECT_DELAY = 5000;
+        const API_URL = 'https://api.ods-cloud.com';
+
         let currentPlaylist = null;
         let currentHash = null;
         let assets = [];
         let currentSlideIndex = 0;
         let slideTimer = null;
         let progressTimer = null;
+        let socket = null;
+        let playerId = localStorage.getItem('ods_player_id');
+        let deviceUuid = localStorage.getItem('ods_device_uuid');
+        let cpuSerial = localStorage.getItem('ods_cpu_serial');
 
         // ─── Offline Border State ───
         const OFFLINE_TEMPLATES = [
@@ -545,10 +554,73 @@
 
         document.addEventListener('contextmenu', e => e.preventDefault());
 
+        // ─── WebSocket (real-time deploy push) ───
+        function connectWebSocket() {
+            if (!API_URL) return;
+
+            socket = io(API_URL, {
+                transports: ['websocket', 'polling'],
+                reconnection: true,
+                reconnectionDelay: RECONNECT_DELAY,
+                reconnectionAttempts: Infinity
+            });
+
+            socket.on('connect', () => {
+                console.log('[WS] Connected to ODS Server');
+                clearOfflineBorder();
+
+                // Register player
+                if (cpuSerial) {
+                    socket.emit('register', {
+                        cpu_serial: cpuSerial,
+                        name: localStorage.getItem('ods_player_name') || 'Atlas Player',
+                        device_uuid: deviceUuid
+                    });
+                }
+            });
+
+            socket.on('registered', (player) => {
+                console.log('[WS] Registered:', player.name);
+                if (player.id && !playerId) {
+                    playerId = player.id;
+                    localStorage.setItem('ods_player_id', playerId);
+                }
+            });
+
+            // Real-time deploy push — instant content update
+            socket.on('deploy_playlist', async (data) => {
+                console.log('[WS] Deploy push received:', data);
+                const playlist = await fetchContent();
+                if (playlist) {
+                    renderPlaylist(playlist);
+                }
+            });
+
+            // Heartbeat
+            setInterval(() => {
+                if (socket?.connected) {
+                    socket.emit('heartbeat', { timestamp: Date.now() });
+                }
+            }, HEARTBEAT_INTERVAL);
+
+            socket.on('disconnect', () => {
+                console.log('[WS] Disconnected');
+                startOfflineBorder();
+            });
+
+            socket.on('connect_error', (err) => {
+                console.warn('[WS] Connection error:', err.message);
+                startOfflineBorder();
+            });
+        }
+
         // ─── Init ───
         async function init() {
             console.log('[ContentManager] Starting...');
             applyTemplate(0);
+
+            // Connect WebSocket for real-time deploy push
+            connectWebSocket();
 
             // Fetch and render content
             const playlist = await fetchContent();
