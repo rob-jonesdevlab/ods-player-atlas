@@ -448,41 +448,42 @@
 </head>
 
 <body>
+    <!-- Player Status Info -->
+    <div class="waiting-state ready" id="waitingState">
+        <div class="waiting-container">
+            <div class="logo">
+                <img src="/resources/ods-player-logo.png" alt="ODS" />
+            </div>
+            <div class="waiting-title">Otter Digital Signage</div>
 
-    <div class="waiting-container">
-        <div class="logo">
-            <img src="/resources/ods-player-logo.png" alt="ODS" />
+            <div class="info-table">
+                <div class="info-row">
+                    <span class="info-label">Account</span>
+                    <span class="info-value" id="infoAccount">Loading...</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Device</span>
+                    <span class="info-value" id="infoDevice">Loading...</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Hostname</span>
+                    <span class="info-value uppercase" id="infoHostname">Loading...</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">IP Address</span>
+                    <span class="info-value" id="infoIp">Loading...</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Network</span>
+                    <span class="info-value" id="infoNetwork">Checking...</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Status</span>
+                    <span class="info-value" id="infoCloud">Offline</span>
+                </div>
+            </div>
+
         </div>
-        <div class="waiting-title">Otter Digital Signage</div>
-
-        <div class="info-table">
-            <div class="info-row">
-                <span class="info-label">Account</span>
-                <span class="info-value" id="infoAccount">Loading...</span>
-            </div>
-            <div class="info-row">
-                <span class="info-label">Device</span>
-                <span class="info-value" id="infoDevice">Loading...</span>
-            </div>
-            <div class="info-row">
-                <span class="info-label">Hostname</span>
-                <span class="info-value uppercase" id="infoHostname">Loading...</span>
-            </div>
-            <div class="info-row">
-                <span class="info-label">IP Address</span>
-                <span class="info-value" id="infoIp">Loading...</span>
-            </div>
-            <div class="info-row">
-                <span class="info-label">Network</span>
-                <span class="info-value" id="infoNetwork">Checking...</span>
-            </div>
-            <div class="info-row">
-                <span class="info-label">Status</span>
-                <span class="info-value" id="infoCloud">Offline</span>
-            </div>
-        </div>
-
-    </div>
     </div>
 
     <!-- Status Pill -->
