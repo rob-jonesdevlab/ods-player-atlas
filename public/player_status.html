@@ -539,6 +539,18 @@
             window.location.href = '/player_link.html';
         }
 
+        // ─── System Info Helper ───
+        async function getSystemInfo() {
+            try {
+                const resp = await fetch('/api/system/info');
+                if (!resp.ok) return {};
+                return await resp.json();
+            } catch (e) {
+                console.warn('[SysInfo] Local fetch failed:', e.message);
+                return {};
+            }
+        }
+
         // ─── WebSocket Connection ───
         function connectWebSocket() {
             socket = io(API_URL, {
@@ -548,7 +560,7 @@
                 reconnectionAttempts: Infinity
             });
 
-            socket.on('connect', () => {
+            socket.on('connect', async () => {
                 console.log('[WS] Connected');
                 hasConnected = true;
                 updatePill('#14b8a6', 'Connected to ODS Cloud');
@@ -557,11 +569,20 @@
                 const cloudEl = document.getElementById('infoCloud');
                 if (cloudEl) { cloudEl.textContent = 'Online'; cloudEl.className = 'info-value connected'; }
 
-                // Register this player
+                // Register this player with full system info
+                const sysInfo = await getSystemInfo();
                 socket.emit('register', {
                     cpu_serial: cpuSerial,
                     name: localStorage.getItem('ods_device_name') || 'ODS Player',
-                    device_uuid: deviceUuid
+                    device_uuid: deviceUuid,
+                    hostname: sysInfo.hostname || null,
+                    ip_address: sysInfo.ip_address || null,
+                    mac_address: null,  // TODO: add mac to /api/system/info
+                    os_version: sysInfo.os_version || null,
+                    disk_free_mb: sysInfo.storage_percent ? (100 - parseInt(sysInfo.storage_percent)) : null,
+                    memory_total_mb: sysInfo.ram_percent ? parseInt(sysInfo.ram_percent) : null,
+                    uptime_seconds: null,  // uptime -p returns human string, not seconds
+                    screen_resolution: sysInfo.display_resolution || null
                 });
             });
 
@@ -610,10 +631,17 @@
             });
         }
 
-        // ─── Heartbeat ───
-        setInterval(() => {
+        // ─── Heartbeat (with volatile telemetry) ───
+        setInterval(async () => {
             if (socket?.connected) {
-                socket.emit('heartbeat', { player_id: playerId });
+                const sysInfo = await getSystemInfo();
+                socket.emit('heartbeat', {
+                    player_id: playerId,
+                    ip_address: sysInfo.ip_address || null,
+                    disk_free_mb: sysInfo.storage_percent ? (100 - parseInt(sysInfo.storage_percent)) : null,
+                    memory_total_mb: sysInfo.ram_percent ? parseInt(sysInfo.ram_percent) : null,
+                    screen_resolution: sysInfo.display_resolution || null
+                });
             }
         }, HEARTBEAT_INTERVAL);
 
@@ -662,6 +690,12 @@
                     playerId = config.player_id;
                     localStorage.setItem('ods_player_id', playerId);
                 }
+
+                // Populate Account/Device info table from config
+                const acctEl = document.getElementById('infoAccount');
+                const devEl = document.getElementById('infoDevice');
+                if (acctEl) acctEl.textContent = config.organization_name || config.organization_id || '—';
+                if (devEl) devEl.textContent = config.player_name || '—';
 
                 console.log('[Config] Loaded:', {
                     playlist: config.playlist?.name,
