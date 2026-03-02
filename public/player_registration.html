@@ -203,17 +203,17 @@
 
         // Block keyboard shortcuts
         document.addEventListener('keydown', function (e) {
-            if (e.ctrlKey && e.altKey && e.shiftKey && e.key === 'O') {
+            if (e.ctrlKey && e.altKey && e.shiftKey && e.code === 'KeyO') {
                 e.preventDefault();
                 window.location.href = '/system_options.html';
                 return;
             }
-            if (e.ctrlKey && e.altKey && e.shiftKey && e.key === 'I') {
+            if (e.ctrlKey && e.altKey && e.shiftKey && e.code === 'KeyI') {
                 e.preventDefault();
                 window.location.href = '/player_status.html';
                 return;
             }
-            if (e.ctrlKey && e.altKey && e.shiftKey && e.key === 'K') {
+            if (e.ctrlKey && e.altKey && e.shiftKey && e.code === 'KeyK') {
                 e.preventDefault();
                 fetch('/api/system/restart-signage', { method: 'POST' }).catch(() => { });
                 return;

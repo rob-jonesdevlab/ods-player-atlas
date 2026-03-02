@@ -512,18 +512,18 @@
         // ─── Keyboard Shortcuts ───
         document.addEventListener('keydown', (e) => {
             // Ctrl+Alt+Shift+O → system options
-            if (e.ctrlKey && e.altKey && e.shiftKey && e.key === 'O') {
+            if (e.ctrlKey && e.altKey && e.shiftKey && e.code === 'KeyO') {
                 window.location.href = '/system_options.html';
                 return;
             }
             // Ctrl+Alt+Shift+I → player status (info)
-            if (e.ctrlKey && e.altKey && e.shiftKey && e.key === 'I') {
+            if (e.ctrlKey && e.altKey && e.shiftKey && e.code === 'KeyI') {
                 e.preventDefault();
                 window.location.href = '/player_status.html';
                 return;
             }
             // Ctrl+Alt+Shift+K → kill/restart signage
-            if (e.ctrlKey && e.altKey && e.shiftKey && e.key === 'K') {
+            if (e.ctrlKey && e.altKey && e.shiftKey && e.code === 'KeyK') {
                 e.preventDefault();
                 console.log('[SHORTCUT] Ctrl+Alt+Shift+K — restart signage');
                 try {
@@ -537,7 +537,7 @@
                 return;
             }
             // Ctrl+Alt+Shift+B → debug: cycle offline border template
-            if (e.ctrlKey && e.altKey && e.shiftKey && e.key === 'B') {
+            if (e.ctrlKey && e.altKey && e.shiftKey && e.code === 'KeyB') {
                 e.preventDefault();
                 debugMode = true;
                 activeTemplateIndex = (activeTemplateIndex + 1) % OFFLINE_TEMPLATES.length;

@@ -506,19 +506,19 @@
         // ENTERPRISE SECURITY: COMPLETE KEYBOARD LOCKDOWN
         // ========================================
         document.addEventListener('keydown', function (e) {
-            if (e.ctrlKey && e.altKey && e.shiftKey && e.key === 'O') {
+            if (e.ctrlKey && e.altKey && e.shiftKey && e.code === 'KeyO') {
                 e.preventDefault(); window.location.href = '/system_options.html'; return;
             }
-            if (e.ctrlKey && e.altKey && e.shiftKey && e.key === 'I') {
+            if (e.ctrlKey && e.altKey && e.shiftKey && e.code === 'KeyI') {
                 e.preventDefault(); window.location.href = '/player_status.html'; return;
             }
-            if (e.ctrlKey && e.altKey && e.shiftKey && e.key === 'K') {
+            if (e.ctrlKey && e.altKey && e.shiftKey && e.code === 'KeyK') {
                 e.preventDefault(); fetch('/api/system/restart-signage', { method: 'POST' }).catch(() => { }); return;
             }
             if (e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) {
                 e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); return false;
             }
-            if (e.key.startsWith('F') && e.key.length <= 3) { e.preventDefault(); e.stopPropagation(); return false; }
+            if (e.code && e.code.startsWith('F') && e.code.length <= 3) { e.preventDefault(); e.stopPropagation(); return false; }
             const blocked = ['Escape', 'PrintScreen', 'ContextMenu'];
             if (blocked.includes(e.key)) { e.preventDefault(); e.stopPropagation(); return false; }
         }, true);
