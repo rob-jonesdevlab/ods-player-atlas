@@ -359,10 +359,11 @@ function getContentForRenderer() {
             id: asset.id,
             type: asset.type,
             filename: asset.filename,
+            url: asset.url || null,
             localPath: localPath,
             duration: asset.duration || 10,
             order: asset.order,
-            available: localPath !== null
+            available: asset.type === 'url' ? true : localPath !== null
         };
     });
 
