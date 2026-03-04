@@ -67,10 +67,16 @@ echo "[ODS] Primary Chromium launched (PID: $PRIMARY_PID)"
 
 # If dual display detected, launch second Chromium on screen 1 with offset
 if [ "$DISPLAY_COUNT" -ge 2 ] && [ -f "$ENROLLMENT_FLAG" ]; then
-    # Get resolution of primary display to offset second window
-    PRIMARY_RES=$(xrandr 2>/dev/null | grep "${DISPLAYS[0]}" | grep -oP '\d+x\d+\+\d+\+\d+' | head -1)
-    PRIMARY_WIDTH=$(echo "$PRIMARY_RES" | cut -d'x' -f1)
-    [ -z "$PRIMARY_WIDTH" ] && PRIMARY_WIDTH=1920
+    # Get the x-offset where the second display starts
+    # Prefer reading the second display's +X offset directly from xrandr
+    SECONDARY_OFFSET=$(xrandr 2>/dev/null | grep "${DISPLAYS[1]}" | grep -oP '\d+x\d+\+\K\d+' | head -1)
+    if [ -z "$SECONDARY_OFFSET" ] || [ "$SECONDARY_OFFSET" = "0" ]; then
+        # Fallback: use primary display width
+        PRIMARY_RES=$(xrandr 2>/dev/null | grep "${DISPLAYS[0]}" | grep -oP '\d+x\d+\+\d+\+\d+' | head -1)
+        SECONDARY_OFFSET=$(echo "$PRIMARY_RES" | cut -d'x' -f1)
+    fi
+    [ -z "$SECONDARY_OFFSET" ] && SECONDARY_OFFSET=1920
+    PRIMARY_WIDTH=$SECONDARY_OFFSET
 
     echo "[ODS] Dual display mode — launching second Chromium at offset ${PRIMARY_WIDTH}x0"
 
