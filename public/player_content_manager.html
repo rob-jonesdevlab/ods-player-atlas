@@ -401,6 +401,10 @@
         // Per-zone state tracking for independent slideshows
         const zoneState = {};  // { zoneId: { assets: [], currentIndex: 0, timer: null } }
 
+        // Detect which screen this instance is rendering (from URL param)
+        const screenParam = new URLSearchParams(window.location.search).get('screen');
+        const screenIndex = screenParam !== null ? parseInt(screenParam, 10) : null;
+
         function renderPlaylist(playlist) {
             const container = document.getElementById('slideshow');
             const empty = document.getElementById('emptyState');
@@ -420,17 +424,56 @@
             container.innerHTML = '';
             Object.keys(zoneState).forEach(zid => clearTimeout(zoneState[zid]?.timer));
 
-            const zones = layout?.zones || [{ id: 'main', label: '1', x: 0, y: 0, w: 100, h: 100 }];
+            let zones = layout?.zones || [{ id: 'main', label: '1', x: 0, y: 0, w: 100, h: 100 }];
+
+            // ─── Dual-screen: filter zones by screen index ───
+            // Each Chromium instance only renders zones for its screen
+            const isDualScreen = (layout?.screen_count || 1) >= 2;
+            if (isDualScreen && screenIndex !== null) {
+                zones = zones.filter(z => z.screen === screenIndex);
+                // Remap zone coordinates to fill this screen's viewport
+                // (combined layout uses 0-50 for screen 0, 50-100 for screen 1)
+                zones = zones.map(z => ({
+                    ...z,
+                    x: screenIndex === 0 ? (z.x * 2) : ((z.x - 50) * 2),
+                    w: z.w * 2
+                }));
+                console.log(`[Content] Dual-screen mode — rendering screen ${screenIndex} zones:`, zones.map(z => z.id));
+            } else if (isDualScreen && screenIndex === null) {
+                // Primary instance with no screen param — show screen 0 zones only
+                zones = zones.filter(z => z.screen === 0);
+                zones = zones.map(z => ({
+                    ...z,
+                    x: z.x * 2,
+                    w: z.w * 2
+                }));
+                console.log(`[Content] Dual-screen mode — rendering screen 0 (primary) zones:`, zones.map(z => z.id));
+            }
+
             const isMultiZone = zones.length > 1;
 
-            if (!isMultiZone) {
+            if (!isMultiZone && zones.length === 1) {
                 // Single zone — original flat slideshow behavior
-                assets = allAssets;
-                renderZoneSlides(container, assets, 'main');
+                // Get assets for this specific zone
+                const zoneId = zones[0].id;
+                let zoneAssets;
+                if (zoneData && zoneData[zoneId]) {
+                    zoneAssets = zoneData[zoneId].sort((a, b) => (a.order || 0) - (b.order || 0));
+                    zoneAssets = zoneAssets.map(a => {
+                        const match = allAssets.find(aa => aa.id === a.id);
+                        return match || a;
+                    });
+                } else {
+                    zoneAssets = allAssets.filter(a => a.zone_id === zoneId);
+                }
+                if (zoneAssets.length === 0) zoneAssets = allAssets;
+
+                assets = zoneAssets;
+                renderZoneSlides(container, assets, zoneId);
                 currentSlideIndex = 0;
-                startSlideTimerForZone('main');
-                console.log(`[Content] Rendering ${assets.length} assets (single zone)`);
-            } else {
+                startSlideTimerForZone(zoneId);
+                console.log(`[Content] Rendering ${assets.length} assets (zone: ${zoneId})`);
+            } else if (isMultiZone) {
                 // Multi-zone — create positioned containers per zone
                 zones.forEach(zone => {
                     const zoneEl = document.createElement('div');
@@ -461,6 +504,13 @@
                     }
                 });
                 console.log(`[Content] Rendering ${allAssets.length} assets across ${zones.length} zones`);
+            } else {
+                // No zones at all — fallback to all assets flat
+                assets = allAssets;
+                renderZoneSlides(container, assets, 'main');
+                currentSlideIndex = 0;
+                startSlideTimerForZone('main');
+                console.log(`[Content] Rendering ${assets.length} assets (fallback single)`);
             }
         }
 
