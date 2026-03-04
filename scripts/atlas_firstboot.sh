@@ -346,9 +346,8 @@ except-interface=end0
 except-interface=lo
 DNSEOF
 
-    # Deploy AP management script
-    cp /tmp/atlas_repo/scripts/ods-setup-ap.sh /usr/local/bin/ods-setup-ap.sh
-    chmod +x /usr/local/bin/ods-setup-ap.sh
+    # NOTE: ods-setup-ap.sh is deployed in deploy_player_scripts() (Step 6)
+    # because the git repo isn't cloned until deploy_atlas() (Step 4)
     log "  ✅ WiFi AP setup configured (SSID: $AP_SSID, open network)"
 
     # Create otter admin user with sudo
@@ -749,6 +748,16 @@ SCRIPT
         log "  ✅ ods-enrollment-boot.sh deployed (from repo)"
     fi
     chmod +x /usr/local/bin/ods-enrollment-boot.sh 2>/dev/null || true
+
+    # --- ods-setup-ap.sh (WiFi AP management) ---
+    # Moved here from create_users() because the repo isn't cloned until deploy_atlas()
+    if [ -f "$REPO_SCRIPTS/ods-setup-ap.sh" ]; then
+        cp "$REPO_SCRIPTS/ods-setup-ap.sh" /usr/local/bin/ods-setup-ap.sh
+        chmod +x /usr/local/bin/ods-setup-ap.sh
+        log "  ✅ ods-setup-ap.sh deployed (from repo)"
+    else
+        log "  ⚠️  ods-setup-ap.sh not found in repo"
+    fi
 
     # --- Enrollment state directory ---
     mkdir -p /etc/ods
