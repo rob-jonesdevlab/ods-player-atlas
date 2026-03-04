@@ -85,7 +85,15 @@ ods-player-atlas/
 │   └── resources/
 │       └── designs/
 │           └── ODS_Background.png  # Default wallpaper for glass card
-├── server.js                     # Express server (port 8080, 43 API endpoints)
+├── server.js                     # Express orchestrator (195 lines, mounts route modules)
+├── routes/                       # Modular Express routers (4 domain modules)
+│   ├── system.js                 # /api/system/* — info, actions, logs, volume, timezone
+│   ├── admin.js                  # /api/admin/*  — auth, terminal, SSH, password, services
+│   ├── network.js                # /api/*        — status, WiFi, display, static IP
+│   └── content.js                # /api/*        — cache, player content, device info, cloud sync
+├── player/                       # Player runtime modules
+│   ├── cloud-sync.js             # WebSocket sync + content polling
+│   └── cache-manager.js          # Offline cache management + manifest
 ├── package.json                  # Node.js dependencies
 ├── VERSION                       # Current version code name ("atlas")
 ├── bin/
@@ -279,8 +287,9 @@ npm start
 # Deploy HTML files
 sshpass -p '0D5@dm!n' scp -o StrictHostKeyChecking=no public/*.html root@10.111.123.102:/home/signage/ODS/public/
 
-# Deploy server
+# Deploy server + route modules
 sshpass -p '0D5@dm!n' scp -o StrictHostKeyChecking=no server.js root@10.111.123.102:/home/signage/ODS/
+sshpass -p '0D5@dm!n' scp -r -o StrictHostKeyChecking=no routes/ root@10.111.123.102:/home/signage/ODS/
 
 # Deploy player modules
 sshpass -p '0D5@dm!n' scp -o StrictHostKeyChecking=no player/*.js root@10.111.123.102:/home/signage/ODS/player/

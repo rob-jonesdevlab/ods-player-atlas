@@ -406,6 +406,13 @@ deploy_atlas() {
         log "  ✅ player/ modules deployed (cloud-sync, cache-manager)"
     fi
 
+    # Copy route modules (modularized in v10-1-0)
+    if [ -d "atlas_repo/routes" ]; then
+        mkdir -p /home/signage/ODS/routes
+        cp -r atlas_repo/routes/* /home/signage/ODS/routes/
+        log "  ✅ routes/ modules deployed (admin, content, network, system)"
+    fi
+
     # Copy bin scripts (health monitor, etc.)
     if [ -d "atlas_repo/bin" ]; then
         cp -r atlas_repo/bin/* /home/signage/ODS/bin/ 2>/dev/null || true

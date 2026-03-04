@@ -1,8 +1,8 @@
 # ODS Player Atlas — Architecture
 
-**Last Updated:** February 28, 2026  
+**Last Updated:** March 4, 2026  
 **Current Version:** v9-3-2-ORIGIN  
-**Status:** Production-ready P:0 → P:1 → P:2 pipeline — WiFi AP connection flow verified, glass card wallpaper, status pill, keyboard shortcuts, configurable offline border
+**Status:** Production-ready P:0 → P:1 → P:2 pipeline — Modular server architecture, WiFi AP connection flow verified, glass card wallpaper, status pill, keyboard shortcuts, configurable offline border
 
 ---
 
@@ -17,7 +17,9 @@ ODS Player OS Atlas converts a Raspberry Pi 4b running Armbian into a locked-dow
 │ → https://www.ods-cloud.com                     │
 ├─────────────────────────────────────────────────┤
 │ ODS Player Atlas (this repo)                    │
-│ → Express server (port 8080)                    │
+│ → Express server (port 8080) — modular routes   │
+│ → routes/system.js, admin.js, network.js,       │
+│   content.js (4 domain routers)                 │
 │ → Chromium --app mode (X11 fullscreen)          │
 │ → systemd services (12 production services)     │
 │ → Boot UX pipeline (Plymouth → FBI → Xorg)     │
@@ -250,6 +252,7 @@ Complete lineage of every P:0 golden image ever built:
 - [x] Keyboard shortcuts (Ctrl+Alt+Shift+I/K/O/B)
 - [x] Offline border 0.450px
 - [x] `/api/system/restart-signage` endpoint
+- [x] **Modular server architecture** — `server.js` refactored from 1,165→194 lines with 4 Express routers (`routes/system.js`, `routes/admin.js`, `routes/network.js`, `routes/content.js`)
 - [ ] ODS Cloud — Player Settings UI for wallpaper, border template, appearance config
 - [ ] ODS Cloud — Content delivery pipeline (cloud-sync, cache-manager)
 - [ ] OTA updates from ODS Cloud dashboard
@@ -325,8 +328,9 @@ The dev device and jdl-mini-box are behind NAT on the lab network (`10.111.123.x
 **Local network deployment (preferred — use when on same network as device):**
 
 ```bash
-# Deploy files directly with sshpass (no interactive prompts)
-sshpass -p '0D5@dm!n' scp -o StrictHostKeyChecking=no file.js root@10.111.123.102:/home/signage/ODS/
+# Deploy server + route modules with sshpass (no interactive prompts)
+sshpass -p '0D5@dm!n' scp -o StrictHostKeyChecking=no server.js root@10.111.123.102:/home/signage/ODS/
+sshpass -p '0D5@dm!n' scp -r -o StrictHostKeyChecking=no routes/ root@10.111.123.102:/home/signage/ODS/
 sshpass -p '0D5@dm!n' ssh -o StrictHostKeyChecking=no root@10.111.123.102 'systemctl restart ods-webserver'
 ```
 
@@ -346,6 +350,10 @@ sshpass -p 'mnbvcxz!!!' scp -o StrictHostKeyChecking=no -P 2222 /tmp/file.js jon
 sshpass -p 'mnbvcxz!!!' ssh -o StrictHostKeyChecking=no -p 2222 jones-dev-lab@localhost
 
 # 5. From jdl-mini-box, SCP to device (use sshpass)
+# For server + routes:
+sshpass -p '0D5@dm!n' scp -o StrictHostKeyChecking=no /tmp/server.js root@10.111.123.102:/home/signage/ODS/
+sshpass -p '0D5@dm!n' scp -r -o StrictHostKeyChecking=no /tmp/routes/ root@10.111.123.102:/home/signage/ODS/
+# For player modules:
 sshpass -p '0D5@dm!n' scp -o StrictHostKeyChecking=no /tmp/file.js root@10.111.123.102:/home/signage/ODS/player/
 
 # 6. From jdl-mini-box, restart webserver on device

@@ -4,11 +4,13 @@
 > **Base URL:** `http://localhost:8080` (device-local)  
 > **Port 80:** Captive portal listener (iOS/Android detection)  
 > **Auth:** Admin endpoints require `x-admin-token` header (30-min session)  
-> **Runtime:** Node.js v20.19.2
+> **Runtime:** Node.js v20.19.2  
+> **Architecture:** Modular routes — `server.js` (orchestrator) + `routes/{system,admin,network,content}.js`
 
 ---
 
-## Captive Portal Detection
+## Captive Portal Detection  
+`server.js`
 
 Auto-redirects phone browsers to `captive_portal.html` when connected to the device's WiFi AP.
 
@@ -23,7 +25,8 @@ Auto-redirects phone browsers to `captive_portal.html` when connected to the dev
 
 ---
 
-## Network
+## Network  
+`routes/network.js`
 
 | Method | Endpoint | Purpose | Response |
 |--------|----------|---------|----------|
@@ -32,7 +35,8 @@ Auto-redirects phone browsers to `captive_portal.html` when connected to the dev
 
 ---
 
-## WiFi
+## WiFi  
+`routes/network.js`
 
 | Method | Endpoint | Purpose | Response |
 |--------|----------|---------|----------|
@@ -43,7 +47,8 @@ Auto-redirects phone browsers to `captive_portal.html` when connected to the dev
 
 ---
 
-## Display
+## Display  
+`routes/network.js`
 
 | Method | Endpoint | Purpose | Response |
 |--------|----------|---------|----------|
@@ -51,7 +56,8 @@ Auto-redirects phone browsers to `captive_portal.html` when connected to the dev
 
 ---
 
-## QR / Enrollment
+## QR / Enrollment  
+`server.js`
 
 | Method | Endpoint | Purpose | Response |
 |--------|----------|---------|----------|
@@ -60,7 +66,8 @@ Auto-redirects phone browsers to `captive_portal.html` when connected to the dev
 
 ---
 
-## System
+## System  
+`routes/system.js`
 
 | Method | Endpoint | Purpose | Notes |
 |--------|----------|---------|-------|
@@ -79,7 +86,8 @@ Auto-redirects phone browsers to `captive_portal.html` when connected to the dev
 
 ---
 
-## Admin (Session-authenticated)
+## Admin (Session-authenticated)  
+`routes/admin.js`
 
 Login creates a 30-minute session token. All admin endpoints require `x-admin-token` header.
 
@@ -94,7 +102,8 @@ Login creates a 30-minute session token. All admin endpoints require `x-admin-to
 
 ---
 
-## Device Info
+## Device Info  
+`routes/content.js`
 
 | Method | Endpoint | Purpose | Response |
 |--------|----------|---------|----------|
@@ -102,7 +111,8 @@ Login creates a 30-minute session token. All admin endpoints require `x-admin-to
 
 ---
 
-## Content Cache
+## Content Cache  
+`routes/content.js`
 
 | Method | Endpoint | Purpose | Response |
 |--------|----------|---------|----------|
@@ -113,7 +123,8 @@ Login creates a 30-minute session token. All admin endpoints require `x-admin-to
 
 ---
 
-## Content Delivery (Player Renderer)
+## Content Delivery (Player Renderer)  
+`routes/content.js`
 
 | Method | Endpoint | Purpose | Response |
 |--------|----------|---------|----------|
@@ -123,7 +134,8 @@ Login creates a 30-minute session token. All admin endpoints require `x-admin-to
 
 ---
 
-## Loader / Signal
+## Loader / Signal  
+`server.js`
 
 | Method | Endpoint | Purpose |
 |--------|----------|---------|
