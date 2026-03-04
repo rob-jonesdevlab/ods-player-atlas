@@ -788,6 +788,10 @@
                 renderPlaylist(playlist);
             }
 
+            // Signal boot wrapper that page is ready (dismisses overlay on screen 0)
+            fetch('/api/loader-ready').catch(() => { });
+            console.log('[ContentManager] Loader-ready signal sent');
+
             // Background cache polling — swap from live to cached when ready
             const CACHE_POLL_INTERVAL = 30 * 1000;  // 30s
             setInterval(async () => {
