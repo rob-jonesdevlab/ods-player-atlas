@@ -18,13 +18,14 @@
 │       ├── inject_atlas.sh
 │       ├── atlas_firstboot.sh
 │       ├── atlas-firstboot.service
-│       ├── atlas_secrets.conf                                  # Sensitive — see below
+│       ├── atlas_secrets.conf                                  # Sensitive — checked into private repo
 │       ├── ods-player-boot-wrapper.sh
 │       ├── start-player-os-ATLAS.sh
 │       ├── ods-phase-selector.sh
 │       ├── ods-enrollment-boot.sh
+│       ├── ods-display-config.sh
 │       └── generate_splash_frames.sh
-└── ods-atlas-golden-v9-1-7-ORIGIN.img                          # Output (built)
+└── ods-atlas-golden-v10-5-0-MANAGER.img                        # Output (built)
 ```
 
 ### `atlas_secrets.conf` (in repo)
@@ -67,7 +68,7 @@ sudo -A rm -f ~/atlas-build/ods-atlas-golden-*.img
 cd ~/atlas-build/ods-player-os-atlas
 sudo -A bash scripts/inject_atlas.sh \
   /home/jones-dev-lab/atlas-build/Armbian_26.2.1_Rpi4b_trixie_current_6.18.9_minimal.img \
-  /home/jones-dev-lab/atlas-build/ods-atlas-golden-v9-1-7-ORIGIN.img
+  /home/jones-dev-lab/atlas-build/ods-atlas-golden-v10-5-0-MANAGER.img
 ```
 
 ### 5. Copy Image to Mac Desktop (ALWAYS)
@@ -82,7 +83,7 @@ SSHPASS='mnbvcxz!!!' sshpass -e scp -o StrictHostKeyChecking=no \
 Use Etcher (recommended) or:
 ```bash
 # macOS (find disk with diskutil list)
-sudo dd if=~/Desktop/ods-atlas-golden-v9-1-7-ORIGIN.img of=/dev/rdiskN bs=4m status=progress
+sudo dd if=~/Desktop/ods-atlas-golden-v10-5-0-MANAGER.img of=/dev/rdiskN bs=4m status=progress
 ```
 
 ### 7. First Boot

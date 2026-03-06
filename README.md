@@ -1,8 +1,8 @@
 # ODS Player OS — Atlas
 
-**Version:** v9-3-2-ORIGIN · **Code Name:** Atlas  
+**Version:** v10-5-0-MANAGER · **Code Name:** Atlas  
 **Purpose:** Dedicated player OS runtime for ODS digital signage  
-**Last Updated:** February 28, 2026
+**Last Updated:** March 6, 2026
 
 ---
 
@@ -25,8 +25,9 @@ The golden image is built offline on the `jdl-mini-box` build server, then flash
 | **Player Ready** | Status page with glass card + wallpaper support (`player_ready.html`, `Ctrl+Alt+Shift+I`) |
 | **Status Pill** | 8-stage color pill showing connection/config state on Player Ready |
 | **Glass Card** | Smokey dark glass card with backdrop-filter blur when wallpaper assigned |
-| **Kiosk Mode** | Auto-recovering Chromium kiosk (systemd restart loop) |
-| **Boot UX** | Seamless black boot → Plymouth splash → Chromium (zero flash) |
+| **Dual-Screen** | Dynamic resolution detection, per-screen splash, auto-respawn |
+| **Kiosk Mode** | Auto-recovering Chromium player (systemd restart loop) |
+| **Boot UX** | Zero-flash boot: Plymouth → FBI bridge → splash → overlay → page (pre-splash modesets) |
 | **Keyboard Shortcuts** | `Ctrl+Alt+Shift+I` (Info), `K` (Kill), `O` (Options), `B` (Debug) |
 | **Offline Border** | Configurable animated border (6 templates, 0.450px default) |
 | **VT Lockdown** | getty tty1-6 masked, SysRq disabled, VT switching blocked |
@@ -37,36 +38,35 @@ The golden image is built offline on the `jdl-mini-box` build server, then flash
 
 ---
 
-## Boot UX Pipeline (v5)
+## Boot UX Pipeline (v10-5-0)
 
-The boot sequence has been carefully engineered for a seamless, flash-free visual experience:
+The boot pipeline delivers a seamless, zero-flash experience from power-on to page-ready. All display modesets happen during black screen (before splash paint):
 
 ```
 Power On
   │
-  ├─ Kernel loads with: splash quiet loglevel=3 consoleblank=0 vt.global_cursor_default=0
+  ├─ Kernel: splash quiet loglevel=3 consoleblank=0 vt.global_cursor_default=0
   │
-  ├─ Plymouth ODS theme → black background, ODS logo watermark, throbber animation
-  │     (UseFirmwareBackground=false, DialogClearsFirmwareBackground=false)
+  ├─ Plymouth ODS theme → 75-frame throbber + watermark (5s hold)
   │
-  ├─ ods-kiosk-wrapper.sh starts:
-  │     1. Wait for DRM (/dev/dri/card*)
-  │     2. ── TTY FLASH FIX ──
-  │     │   • setterm: black-on-black text, cursor off on VT1
-  │     │   • printf: clear VT1 screen
-  │     │   • printk 0 + stty -echo: suppress console output
-  │     │   • dd /dev/zero → /dev/fb0: fill framebuffer black
-  │     3. plymouth deactivate (VT1 is already black → no flash)
-  │     4. Xorg :0 vt1 -novtswitch -background none
-  │     5. xdpyinfo poll loop (50ms intervals, max 2s)
-  │     6. xsetroot -solid "#000000"
-  │     7. matchbox-window-manager + unclutter
-  │     8. start-kiosk.sh (Chromium --kiosk --default-background-color=000000)
-  │     9. Wait for /tmp/ods-loader-ready signal
-  │    10. plymouth quit → seamless transition to Chromium
+  ├─ ods-player-boot-wrapper.sh starts:
+  │     Stage 1: VT Blackout (tty1-3 + fb0 zero + cursor hide)
+  │     Stage 2: Plymouth hold (5s) → FBI bridge "Booting system" + dots
+  │     ── DISPLAY CONFIG (black screen) ──
+  │     │   • Xorg start → xrdb black defaults → FBI killed
+  │     │   • ods-display-config.sh (modeset) → 0.3s DRM settle
+  │     │   • HDMI-2 extend if mirrored → xsetroot black
+  │     │   • Compute screen metrics (SCREEN_W, ODS_SCALE)
+  │     ── END DISPLAY CONFIG ──
+  │     Stage 4: "Starting services" animation (stable display)
+  │     Stage 5: Openbox + GTK setup
+  │     Stage 6: "Launching ODS" overlay (hides Chromium init)
+  │     Stage 7: Page visible → overlay killed
   │
-  └─ Result: Black → ODS splash → Black → Chromium (no white/grey flash)
+  └─ Result: Black → ODS splash → animations → page (zero flash)
 ```
+
+> See `.arch/boot_ux_pipeline.md` for full details including dual-screen support and lessons learned.
 
 ---
 
@@ -95,20 +95,27 @@ ods-player-atlas/
 │   ├── cloud-sync.js             # WebSocket sync + content polling
 │   └── cache-manager.js          # Offline cache management + manifest
 ├── package.json                  # Node.js dependencies
-├── VERSION                       # Current version code name ("atlas")
+├── VERSION                       # Current version ("v10-5-0-MANAGER")
 ├── bin/
 │   └── ods_health_monitor.sh     # Health monitoring script
 ├── brand/
-│   └── splash/                   # Plymouth theme assets (landscape/portrait)
+│   └── splash/                   # Plymouth theme assets + generated frames
 ├── scripts/
 │   ├── inject_atlas.sh           # Golden image builder (loop-mount + inject)
 │   ├── atlas_firstboot.sh        # 11-step automated first boot (~1400 lines)
 │   ├── atlas-firstboot.service   # systemd oneshot service
+│   ├── ods-player-boot-wrapper.sh # Boot pipeline orchestrator
 │   ├── start-player-os-ATLAS.sh  # Chromium --app mode launcher
+│   ├── ods-phase-selector.sh     # Phase 2 (enrollment) vs Phase 3 (production)
+│   ├── ods-enrollment-boot.sh    # Phase 2 enrollment boot
 │   ├── ods-setup-ap.sh           # WiFi AP management
-│   └── atlas_secrets.conf        # Credentials (NOT in git)
+│   ├── generate_splash_frames.sh # Regenerates all splash PNGs
+│   └── atlas_secrets.conf        # Credentials (checked into private repo)
 ├── .arch/
 │   ├── project.md                # Full architecture documentation
+│   ├── boot_ux_pipeline.md       # Boot UX pipeline documentation
+│   ├── build_guide.md            # Golden image build guide
+│   ├── image_processes.md        # Phase 0/1/2 image lifecycle
 │   └── api_doc.md                # API documentation (43 endpoints)
 └── README.md
 ```
@@ -184,10 +191,10 @@ scp jones-dev-lab@10.111.123.134:~/atlas-build/ods-atlas-rpi5-golden-v5.img ~/De
 
 | Service | Purpose | Type |
 |---------|---------|------|
-| `ods-kiosk.service` | X11 + Chromium kiosk wrapper | simple, restart=always |
+| `ods-player-ATLAS.service` | Boot wrapper + X11 + Chromium player | simple, restart=always |
 | `ods-webserver.service` | Node.js Express server (port 8080) | simple, User=signage |
 | `ods-health-monitor.service` | Automated health checks | simple, restart=always |
-| `ods-plymouth-hold.service` | Hold Plymouth splash until kiosk starts | oneshot |
+| `ods-plymouth-hold.service` | Hold Plymouth splash until player starts | oneshot |
 | `ods-hide-tty.service` | Suppress TTY1 text output | oneshot |
 | `ods-shutdown-splash.service` | Show Plymouth on reboot/shutdown | oneshot |
 | `ods-rustdesk-enterprise.service` | RustDesk remote access | simple, restart=always |
@@ -224,9 +231,10 @@ scp jones-dev-lab@10.111.123.134:~/atlas-build/ods-atlas-rpi5-golden-v5.img ~/De
 | Server | `/home/signage/ODS/server.js` |
 | Health Monitor | `/home/signage/ODS/bin/ods_health_monitor.sh` |
 | Boot Logs | `/home/signage/ODS/logs/boot/` |
-| Kiosk Script | `/usr/local/bin/start-kiosk.sh` |
-| Kiosk Wrapper | `/usr/local/bin/ods-kiosk-wrapper.sh` |
-| Hide TTY Script | `/usr/local/bin/hide-tty.sh` |
+| Boot Wrapper | `/usr/local/bin/ods-player-boot-wrapper.sh` |
+| Chromium Launcher | `/usr/local/bin/start-player-ATLAS.sh` |
+| Phase Selector | `/usr/local/bin/ods-phase-selector.sh` |
+| Display Config | `/usr/local/bin/ods-display-config.sh` |
 | Plymouth Theme | `/usr/share/plymouth/themes/ods/` |
 | Xorg No-VT Config | `/etc/X11/xorg.conf.d/10-no-vtswitch.conf` |
 | Secrets | `/usr/local/etc/atlas_secrets.conf` (chmod 600) |
@@ -235,11 +243,18 @@ scp jones-dev-lab@10.111.123.134:~/atlas-build/ods-atlas-rpi5-golden-v5.img ~/De
 
 ## Version History
 
-| Image | Date | Key Changes |
-|-------|------|-------------|
-| v1 (golden) | Feb 17, 2026 | Initial build — basic kiosk, Plymouth, services |
-| v4 | Feb 18, 2026 | VT lockdown (getty mask, SysRq off), shutdown splash fix |
-| **v5** | **Feb 19, 2026** | **TTY flash fix (VT1 pre-paint), tight Xorg ready loop, Ctrl+Alt+Shift+O shortcut** |
+| Version | Date | Key Changes |
+|---------|------|-------------|
+| v1–v6 | Feb 16-18, 2026 | Foundation: firstboot, lockdown, Plymouth, services |
+| v7 | Feb 21-22, 2026 | Openbox WM, `--app` mode, FBI bridge, overlay approach |
+| v8 | Feb 22-23, 2026 | Premium boot UX: 4K splash, 5-frame animations, enrollment |
+| v9.0 | Feb 24, 2026 | Major: player naming convention, consolidated assets |
+| v9.1 | Feb 26, 2026 | 7 root cause fixes (gate file, apt batching, resize) |
+| v9.2-9.3 | Feb 27-28, 2026 | WiFi AP, captive portal, glass card, status pill, shortcuts |
+| v10.1 | Mar 1, 2026 | Modularization (4 route modules), 78/78 tests, content delivery |
+| v10.2-10.3 | Mar 2, 2026 | Boot stability: rollback to `e417033`, explicit `--mode 1920x1080` |
+| v10.4 | Mar 3, 2026 | Dynamic resolution, Screen 1 watermark, auto-respawn, 429 backoff |
+| **v10.5** | **Mar 6, 2026** | **Zero-flash boot: pre-splash modesets, DRM settle, HDMI-2 fix** |
 
 ---
 
@@ -249,21 +264,19 @@ scp jones-dev-lab@10.111.123.134:~/atlas-build/ods-atlas-rpi5-golden-v5.img ~/De
 |-------|---------|--------|
 | `sudo -S` over SSH hangs | Use `SUDO_ASKPASS` with `-A` flag instead | ✅ Workaround |
 | `inject_atlas.sh` path with sudo | Pass explicit paths as args (sudo sets `$HOME=/root`) | ✅ Fixed |
-| `package.json` name | Still says `ods-wifi-setup` — legacy artifact | ⚠️ Cosmetic |
-| Armbian auto-updates | `jdl-mini-box` may install updates and reboot during builds | ⚠️ Monitor |
+| `xrandr --preferred` flash | Triggers DRM mode switch on 4K displays — use explicit `--mode` | ✅ Fixed v10.3 |
+| Runtime `convert -resize` during boot | Too heavy for Pi CPU — use pre-baked assets | ✅ Fixed v10.3 |
+| Display modesets during splash | DRM blanks cause animation gaps — move to pre-splash | ✅ Fixed v10.5 |
+| "Baked" scripts don't revert with git | Verify `/usr/local/bin/` scripts after code changes | ⚠️ By design |
 
 ---
 
-## Next Version
+## Next Steps
 
-**v9-3-2** (current) — Player Ready Overhaul & Glass Card
-
-- Smokey glass card with wallpaper support
-- 8-stage status pill
-- Keyboard shortcuts: `Ctrl+Alt+Shift+I/K/O/B`
-- Config `appearance` section (wallpaper, card style)
-- Restart-signage API endpoint
-- File renames for clarity
+- [ ] P:0 golden image rebuild → **v10-5-0-MANAGER**
+- [ ] ODS Cloud — Content delivery pipeline
+- [ ] ODS Cloud — Player Settings UI
+- [ ] OTA updates from ODS Cloud dashboard
 
 ---
 

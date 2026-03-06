@@ -1,12 +1,12 @@
 # Boot UX Pipeline — ODS Player OS
 
-## Status: ✅ Premium Boot — Multi-Resolution Verified
+## Status: ✅ Premium Boot — Zero-Flash v10-5-0 Pipeline
 
 ---
 
 ## Architecture Overview
 
-The boot pipeline provides a seamless visual experience from power-on to page-ready, with zero console text, zero grey flash, and animated transitions across every stage. All splash assets use 4K source images that are dynamically resized to the detected display resolution.
+The boot pipeline provides a seamless visual experience from power-on to page-ready, with zero console text, zero grey/white flash, and animated transitions across every stage. All display configuration and modesets occur **before** the splash is painted, ensuring the user never sees a blank screen during transitions.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -15,6 +15,7 @@ The boot pipeline provides a seamless visual experience from power-on to page-re
 │                                                                        │
 │ Each stage covers the gap left by the previous one.                    │
 │ At no point does the user see console text, a cursor, or bare TTY.    │
+│ ALL display modesets happen during black screen (before splash).       │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -26,11 +27,23 @@ The boot pipeline provides a seamless visual experience from power-on to page-re
 Stage 1: VT Blackout                       — TTY1-3 blanked, fb0 zeroed, cursors hidden
 Stage 2: Plymouth throbber (5s hold)       — kernel/initramfs splash, 75-frame spinner
 Stage 3: FBI bridge animation (~3.5s)      — "Booting system" + 1-5 dots (raw RGB565 → /dev/fb0)
-Stage 4: Starting services (1.5s)          — 5-frame animation on Xorg root window
-Stage 5: Setup (Openbox, display config)   — WM starts, xrandr resolution applied
+  ── DISPLAY CONFIG (black screen) ──
+  Xorg start → xrdb black defaults → FBI killed → xsetroot black
+  → ods-display-config.sh (modeset #1) → 0.3s DRM settle
+  → HDMI-2 extend if mirrored (modeset #2) → xsetroot black
+  → Compute screen metrics (SCREEN_W, ODS_SCALE)
+  ── END DISPLAY CONFIG ──
+Stage 4: Starting services (1.5s)          — 5-frame animation on Xorg root window (stable display)
+Stage 5: Setup (Openbox, GTK)              — WM starts (no display config — already done)
 Stage 6: Launching ODS overlay (~6s)       — 5-frame animation on overlay window, hides Chromium init
 Stage 7: Page visible                      — overlay killed, rendered page revealed
 ```
+
+### Key Design Principle: Pre-Splash Modesets
+
+**All xrandr modesets happen during the black-screen period between FBI kill and splash paint.** DRM modesets physically blank displays for ~100ms — by running them before any splash is painted, these blanks are invisible to the user.
+
+Previous versions ran `ods-display-config.sh` and HDMI-2 extension DURING the splash (Stage 5), causing the "Starting services" animation to disappear and reappear as the DRM controller re-initialized. The v10-5-0 restructure eliminates this by moving all display config to the black-screen window.
 
 ### Stage Details
 
@@ -38,8 +51,9 @@ Stage 7: Page visible                      — overlay killed, rendered page rev
 |-------|-----------|-----------|-------|
 | Plymouth | two-step throbber module | 75-frame spinner at .90 vertical | Held for 5s, then quit-with-retain |
 | FBI bridge | Raw RGB565 → `/dev/fb0` | "Booting system" + 1-5 dots | Seamless handoff: starts BEFORE Plymouth quits |
-| Starting services | `display -window root` | "Starting services" + 1-5 dots | Painted directly on Xorg root window |
-| Launching ODS | `display -window $OVERLAY_WID` | "Launching ODS" + 1-5 dots | Pre-resized via `convert -resize` to screen resolution |
+| Display Config | xrandr | None (black screen) | All modesets during black screen — invisible to user |
+| Starting services | `display -window root` | "Starting services" + 1-5 dots | Painted on Xorg root AFTER all modesets complete |
+| Launching ODS | `display -window $OVERLAY_WID` | "Launching ODS" + 1-5 dots | Black-background overlay via `xrdb -merge` + `-background black` |
 
 ### Splash Frame Spec (5-Frame Standard)
 
@@ -69,7 +83,7 @@ All splash animations use exactly **5 frames** with 1-5 trailing dots. Text is c
 | `start-player-ATLAS.sh` | Chromium launcher (`--app` mode, OS-specific) |
 | `ods-phase-selector.sh` | Routes Phase 2 (enrollment) vs Phase 3 (production) |
 | `ods-enrollment-boot.sh` | Phase 2 enrollment boot (no Chromium/Xorg) |
-| `ods-display-config.sh` | xrandr resolution configuration |
+| `ods-display-config.sh` | xrandr resolution configuration (baked by firstboot) |
 
 ### On Device (`/usr/share/plymouth/themes/ods/`)
 
@@ -98,7 +112,7 @@ All splash assets live in `brand/splash/generated/`. This is the only location �
 ## Naming Convention
 
 | Category | ATLAS Tag? | Rationale |
-|----------|-----------|-----------|
+|----------|-----------|-----------| 
 | Boot wrapper | **No** | Boot sequence is universal across all OS versions |
 | Chromium launcher | **Yes** | OS-specific configuration |
 | Systemd service | **Yes** | `ods-player-ATLAS.service` — OS-specific |
@@ -107,7 +121,7 @@ All splash assets live in `brand/splash/generated/`. This is the only location �
 
 ---
 
-## Grey Flash Root Causes & Fixes
+## Grey/White Flash Root Causes & Fixes
 
 | Root Cause | Fix | Version |
 |-----------|-----|---------|
@@ -117,6 +131,12 @@ All splash assets live in `brand/splash/generated/`. This is the only location �
 | Framebuffer animation garbled | RGB565 format (16-bit fb0, not 32-bit BGRA) | v8-0-5 |
 | `preload.html` redirect stalls in `--app` mode | Direct URL to `network_setup.html` | v8-0-0 |
 | Overlay shows tiny mirror at 1080p | `convert -resize` before `display` (4K→detected res) | v8-3-2 |
+| Runtime `convert -resize` during boot window | Pre-baked per-resolution assets, no runtime resizing | v10-3-0 |
+| `xrandr --preferred` DRM mode switch flash | Explicit `--mode 1920x1080` (no mode switch needed) | v10-3-0 |
+| Display config modesets during splash | Move ALL modesets before splash paint (black screen) | **v10-5-0** |
+| HDMI-2 extension during splash | Move HDMI-2 extend to pre-splash black screen period | **v10-5-0** |
+| HDMI-2 detection race after modeset | 0.3s DRM settle delay after `ods-display-config.sh` | **v10-5-0** |
+| White flash during overlay creation | `xrdb -merge '*background: black'` + `-background black` for ImageMagick | **v10-4-0** |
 
 ---
 
@@ -129,6 +149,20 @@ The overlay and splash images are 4K source (3840×2160). At runtime, the boot w
 | 3840×2160 | 2x | Native 4K, no resize needed |
 | 2560×1440 | 1.5x | Resized from 4K |
 | 1920×1080 | 1x | Resized from 4K (most common) |
+
+---
+
+## Dual-Screen Support
+
+For dual-screen setups (HDMI-1 + HDMI-2), the boot wrapper:
+
+1. Detects HDMI-2 during the black-screen phase (after DRM settle)
+2. Extends HDMI-2 to the right of HDMI-1 if mirrored (`+0+0`)
+3. Creates separate overlay windows for each screen
+4. Runs synchronized "Launching ODS" animations on both overlays
+5. Launches Chromium with per-screen pages positioned by xrandr offset
+
+Screen 1 gets a smooth fade-in transition when its overlay is killed.
 
 ---
 
@@ -155,3 +189,7 @@ After enrollment completes, the device sets the enrolled flag and reboots into P
 8. **`ods-display-config.sh` runs BEFORE the overlay** — if it changes resolution, the overlay must use the new resolution, not the raw 4K
 9. **Center text on words, not on text+dots** — anchor X on base text width, dots trail right. Use monospace font for pixel-perfect consistency
 10. **Always check project docs for credentials** — don't guess SSH passwords when `atlas_secrets.conf` is right there in the repo
+11. **ALL display modesets MUST happen before splash paint.** DRM controller blanks displays for ~100ms during modesets — invisible on black, catastrophic during animation (v10-5-0)
+12. **Add DRM settle delay after modesets.** xrandr state is transiently incorrect immediately after a modeset — 0.3s delay prevents race conditions in HDMI-2 detection (v10-5-0)
+13. **`xrandr --preferred` is forbidden** — triggers DRM mode switch flash on 4K-capable displays (v10-3-0)
+14. **"Baked" scripts on device don't revert with git.** Always verify `/usr/local/bin/` scripts against expected state after code changes (v10-3-0)

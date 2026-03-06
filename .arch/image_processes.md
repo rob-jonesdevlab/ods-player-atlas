@@ -206,7 +206,7 @@ Resize service:       ✅ Re-enabled for clones
 | `inject_atlas.sh` | `scripts/` in repo | Phase 0 image builder |
 | `atlas_firstboot.sh` | `scripts/` in repo | Firstboot provisioning |
 | `restore_golden.sh` | `golden-clone*/` on jdl-mini-box | Phase 1 clone restore |
-| `atlas_secrets.conf` | `~/atlas-build/scripts/` on jdl-mini-box | Credentials (NOT in git) |
+| `atlas_secrets.conf` | `scripts/` in repo | Credentials (checked into private repo) |
 
 ---
 
