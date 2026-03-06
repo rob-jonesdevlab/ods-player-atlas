@@ -93,6 +93,8 @@ xset s noblank 2>/dev/null || true
 openbox --config-file /etc/ods/openbox-rc.xml &
 unclutter -idle 0.01 -root &
 sleep 0.5
+# Set root to solid black — prevents white flash when xrandr invalidates painted content
+DISPLAY=:0 xsetroot -solid black 2>/dev/null || true
 # Apply display config AFTER Openbox (proven e417033 pattern).
 # Mode changes happen here, covered by Stage 6 overlay.
 /usr/local/bin/ods-display-config.sh 2>/dev/null || true
