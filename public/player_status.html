@@ -444,10 +444,30 @@
         .offline-debug.visible {
             display: block;
         }
+
+        /* ─── Boot Curtain (smooth reveal after overlay kill) ─── */
+        .boot-curtain {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: #000;
+            z-index: 9999;
+            opacity: 1;
+            transition: opacity 0.6s ease-out;
+            pointer-events: none;
+        }
+
+        .boot-curtain.reveal {
+            opacity: 0;
+        }
     </style>
 </head>
 
 <body>
+    <!-- Boot curtain — hides content until overlay is killed, then fades out -->
+    <div class="boot-curtain" id="bootCurtain"></div>
     <!-- Player Status Info -->
     <div class="waiting-state ready" id="waitingState">
         <div class="waiting-container">
@@ -998,6 +1018,30 @@
             return false;
         }
 
+        // ─── Boot Curtain (syncs with boot wrapper overlay kill) ───
+        function waitForBootComplete() {
+            const curtain = document.getElementById('bootCurtain');
+            if (!curtain) return;
+
+            async function poll() {
+                try {
+                    const resp = await fetch('/api/boot-status');
+                    const data = await resp.json();
+                    if (data.complete) {
+                        curtain.classList.add('reveal');
+                        console.log('[Boot] Boot complete — curtain fading out');
+                        // Remove curtain from DOM after transition
+                        setTimeout(() => curtain.remove(), 700);
+                        return;
+                    }
+                } catch (e) {
+                    // Server not ready — keep polling
+                }
+                setTimeout(poll, 300);
+            }
+            poll();
+        }
+
         // ─── Init ───
         async function init() {
             // Signal boot wrapper that page is ready — dismisses the overlay
@@ -1014,6 +1058,9 @@
             // Show waiting state with transition
             const ws = document.getElementById('waitingState');
             requestAnimationFrame(() => ws.classList.add('ready'));
+
+            // Wait for boot overlay to be killed, then fade in
+            waitForBootComplete();
 
             // Wait a moment for WS registration, then fetch config
             setTimeout(async () => {

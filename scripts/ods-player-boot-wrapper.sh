@@ -76,6 +76,10 @@ for i in $(seq 1 120); do
 done
 xhost +local: 2>/dev/null || true
 
+# Force X11 defaults to black — prevents white flashes when new windows are created
+# (ImageMagick display, Openbox, etc. all inherit this default)
+echo '*background: black' | DISPLAY=:0 xrdb -merge 2>/dev/null || true
+
 # Kill fbi animation — Xorg now owns the display
 touch "$STOP_FBI"
 kill $FBI_ANIM_PID 2>/dev/null || true
@@ -168,7 +172,7 @@ rm -f /tmp/ods-loader-ready /tmp/ods-boot-complete
 
 # Screen 0 overlay — use HD overlay directly (no resize needed at 1080p)
 log "Overlay: creating ${SCREEN_FULL} overlay"
-DISPLAY=:0 display -immutable -title BOOT_OVERLAY \
+DISPLAY=:0 display -immutable -background black -title BOOT_OVERLAY \
   -geometry ${SCREEN_FULL}+0+0 \
   "$ANIM_DIR/overlay_launch_1.png" 2>/dev/null &
 OVERLAY_PID=$!
@@ -183,7 +187,7 @@ OVERLAY2_WID=""
 if [ -n "$HDMI2_RES" ]; then
     HDMI2_W=$(echo "$HDMI2_RES" | cut -dx -f1)
     HDMI2_H=$(echo "$HDMI2_RES" | cut -dx -f2)
-    DISPLAY=:0 display -immutable -title BOOT_OVERLAY2 \
+    DISPLAY=:0 display -immutable -background black -title BOOT_OVERLAY2 \
       -geometry ${HDMI2_RES}+${HDMI1_W}+0 \
       "$ANIM_DIR/overlay_launch_1.png" 2>/dev/null &
     OVERLAY2_PID=$!
