@@ -109,7 +109,8 @@ log "Starting ODS services animation complete"
 snap "after_services_anim"
 
 # ── STAGE 5: SETUP (Openbox, display config, metrics) ────────────────
-DISPLAY=:0 xsetroot -solid black 2>/dev/null || true
+# NOTE: Do NOT xsetroot black here — splash stays visible on root until overlay covers it
+# (proven e417033 pattern: zero root-clearing between splash and overlay)
 xset -dpms 2>/dev/null || true
 xset s off 2>/dev/null || true
 xset s noblank 2>/dev/null || true
@@ -117,8 +118,7 @@ openbox --config-file /etc/ods/openbox-rc.xml &
 unclutter -idle 0.01 -root &
 sleep 0.5
 snap "after_openbox_start"
-# Re-blacken after Openbox (it may alter root)
-DISPLAY=:0 xsetroot -solid black 2>/dev/null || true
+# NOTE: Do NOT xsetroot black here — Openbox does not alter root (tested e417033)
 # Apply display config AFTER Openbox (proven e417033 pattern).
 /usr/local/bin/ods-display-config.sh 2>/dev/null || true
 log "Openbox + display config applied"
@@ -258,6 +258,14 @@ done
 # Wait 1s for page paint to complete
 sleep 1
 log "Buffer complete — killing overlays"
+
+# Paint overlays BLACK before killing — ensures the transition is
+# black(overlay) → black(boot curtain) with no white flash from
+# X11 window destruction exposing undefined content
+convert -size ${SCREEN_FULL} xc:black /tmp/ods_black.png 2>/dev/null
+[ -n "$OVERLAY_WID" ] && DISPLAY=:0 display -window "$OVERLAY_WID" /tmp/ods_black.png 2>/dev/null
+[ -n "$OVERLAY2_WID" ] && DISPLAY=:0 display -window "$OVERLAY2_WID" /tmp/ods_black.png 2>/dev/null
+sleep 0.15
 
 # Kill BOTH overlays simultaneously — synced reveal on both screens
 kill $OVERLAY_PID 2>/dev/null || true
