@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<openbox_config xmlns="http://openbox.org/3.4/rc">
+  <resistance><strength>0</strength></resistance>
+  <focus><followMouse>no</followMouse></focus>
+  <placement><policy>Smart</policy></placement>
+  <desktops><number>1</number></desktops>
+
+  <!-- No decorations on any window by default (player mode) -->
+  <applications>
+    <application class="*">
+      <decor>no</decor>
+      <maximized>yes</maximized>
+    </application>
+    <!-- Boot overlay: fullscreen, always above Chromium -->
+    <application title="BOOT_OVERLAY">
+      <decor>no</decor>
+      <maximized>yes</maximized>
+      <layer>above</layer>
+      <fullscreen>yes</fullscreen>
+    </application>
+    <!-- Admin terminal: decorated, always-on-top, centered -->
+    <application class="XTerm" title="ODS Admin*">
+      <decor>yes</decor>
+      <maximized>no</maximized>
+      <layer>above</layer>
+      <size><width>800</width><height>600</height></size>
+      <position force="yes"><x>center</x><y>center</y></position>
+    </application>
+  </applications>
+
+  <!-- No keybindings (all keyboard handled by Chromium JavaScript) -->
+  <keyboard/>
+  <mouse/>
+</openbox_config>

@@ -1,0 +1,17 @@
+{
+    "mode": "single_hd_portrait",
+    "description": "Single HD monitor, portrait (rotated left)",
+    "windows": [
+        {
+            "screen": 0,
+            "position": "fullscreen",
+            "url": "http://localhost:8080/network_setup.html"
+        }
+    ],
+    "monitor_config": {
+        "orientation": "portrait",
+        "mapping": {
+            "screen_0": "HDMI-1"
+        }
+    }
+}

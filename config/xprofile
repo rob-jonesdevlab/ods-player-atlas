@@ -1,0 +1,5 @@
+# ODS Sleep Prevention (Layer 4 - login persistence)
+# Adapted from legacy ods_power_mgr.sh
+xset s off
+xset s noblank
+xset -dpms

@@ -1,0 +1,16 @@
+[Unit]
+Description=ODS Player Web Server
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=signage
+WorkingDirectory=/home/signage/ODS
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=5
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target

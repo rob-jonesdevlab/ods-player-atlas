@@ -1,0 +1,13 @@
+[Unit]
+Description=ODS Health Monitor
+After=ods-player-ATLAS.service
+
+[Service]
+Type=simple
+User=root
+ExecStart=/home/signage/ODS/bin/ods_health_monitor.sh start
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

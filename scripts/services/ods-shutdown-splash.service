@@ -1,0 +1,14 @@
+[Unit]
+Description=ODS Plymouth Shutdown Splash Hold
+DefaultDependencies=no
+Before=systemd-poweroff.service systemd-reboot.service systemd-halt.service
+After=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -c "plymouth show-splash 2>/dev/null || true; sleep 4"
+TimeoutStartSec=10
+RemainAfterExit=yes
+
+[Install]
+WantedBy=poweroff.target reboot.target halt.target

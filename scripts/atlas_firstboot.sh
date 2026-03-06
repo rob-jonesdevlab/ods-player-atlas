@@ -438,191 +438,28 @@ deploy_atlas() {
 deploy_services() {
     log "⚙️  Step 5: Deploying systemd services..."
 
-    # --- ods-player-ATLAS.service ---
-    # Phase selector gates between Phase 2 (enrollment) and Phase 3 (production)
-    cat > /etc/systemd/system/ods-player-ATLAS.service << 'EOF'
-[Unit]
-Description=ODS Player Boot (Phase Selector)
-# Start after webserver is up. Do NOT wait for plymouth-hold.
-# Phase selector routes to enrollment boot or production wrapper.
-After=ods-webserver.service
-Wants=ods-webserver.service
+    local REPO_SERVICES="/tmp/atlas_repo/scripts/services"
 
-[Service]
-Type=simple
-User=root
-ExecStart=/usr/local/bin/ods-phase-selector.sh
-Restart=always
-RestartSec=10
-StartLimitIntervalSec=0
-StandardOutput=journal
-StandardError=journal
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-    # --- ods-webserver.service ---
-    cat > /etc/systemd/system/ods-webserver.service << 'EOF'
-[Unit]
-Description=ODS Player Web Server
-After=network.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-User=signage
-WorkingDirectory=/home/signage/ODS
-ExecStart=/usr/bin/node server.js
-Restart=always
-RestartSec=5
-Environment=NODE_ENV=production
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-    # --- ods-health-monitor.service ---
-    cat > /etc/systemd/system/ods-health-monitor.service << 'EOF'
-[Unit]
-Description=ODS Health Monitor
-After=ods-player-ATLAS.service
-
-[Service]
-Type=simple
-User=root
-ExecStart=/home/signage/ODS/bin/ods_health_monitor.sh start
-Restart=always
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-    # --- ods-plymouth-hold.service ---
-    # CRITICAL: This service BLOCKS plymouth-quit.service from killing Plymouth
-    # until the boot wrapper signals it's taken over the display.
-    # Without this, plymouth-quit kills Plymouth at ~10s, leaving a 26s gap
-    # of bare TTY before Xorg starts.
-    cat > /etc/systemd/system/ods-plymouth-hold.service << 'EOF'
-[Unit]
-Description=ODS Plymouth Hold - Block plymouth-quit until player is ready
-DefaultDependencies=no
-After=plymouth-start.service
-Before=plymouth-quit.service plymouth-quit-wait.service getty@tty1.service
-
-[Service]
-Type=oneshot
-# Wait for boot wrapper to signal it has taken over the display
-# /tmp/ods-player-os-starting-ATLAS is touched by the wrapper AFTER VT1 blackout
-# Max wait 90s to prevent boot hang
-ExecStart=/bin/bash -c 'for i in $(seq 1 180); do [ -f /tmp/ods-player-os-starting-ATLAS ] && break; sleep 0.5; done'
-RemainAfterExit=yes
-TimeoutStartSec=95
-
-[Install]
-WantedBy=sysinit.target
-EOF
-
-    # --- ods-dpms-enforce.service (Issue #4 fix: Layer 5a — periodic DPMS kill) ---
-    cat > /etc/systemd/system/ods-dpms-enforce.service << 'EOF'
-[Unit]
-Description=ODS DPMS Enforcement (Layer 5a - periodic sleep prevention)
-
-[Service]
-Type=oneshot
-User=root
-Environment=DISPLAY=:0
-ExecStart=/bin/bash -c "xset -dpms; xset s off; xset s noblank; xdotool key ctrl 2>/dev/null || true"
-EOF
-
-    cat > /etc/systemd/system/ods-dpms-enforce.timer << 'EOF'
-[Unit]
-Description=Enforce DPMS off every 5 minutes
-
-[Timer]
-OnBootSec=60
-OnUnitActiveSec=300
-
-[Install]
-WantedBy=timers.target
-EOF
-
-    # --- ods-display-config.service (Upgrade B: dual-monitor + portrait) ---
-    cat > /etc/systemd/system/ods-display-config.service << 'EOF'
-[Unit]
-Description=ODS Display Configuration (xrandr)
-After=ods-player-ATLAS.service
-
-[Service]
-Type=oneshot
-User=root
-Environment=DISPLAY=:0
-ExecStart=/usr/local/bin/ods-display-config.sh
-RemainAfterExit=yes
-
-[Install]
-WantedBy=graphical.target
-EOF
-
-    # --- ods-hide-tty.service ---
-    cat > /etc/systemd/system/ods-hide-tty.service << 'EOF'
-[Unit]
-Description=Hide TTY1 text (player mode)
-DefaultDependencies=no
-After=local-fs.target
-Before=getty@tty1.service ods-player-ATLAS.service
-
-[Service]
-Type=oneshot
-ExecStart=/usr/local/bin/hide-tty.sh
-RemainAfterExit=yes
-
-[Install]
-WantedBy=sysinit.target
-EOF
-
-    # --- ods-shutdown-splash.service ---
-    cat > /etc/systemd/system/ods-shutdown-splash.service << 'EOF'
-[Unit]
-Description=ODS Plymouth Shutdown Splash Hold
-DefaultDependencies=no
-Before=systemd-poweroff.service systemd-reboot.service systemd-halt.service
-After=multi-user.target
-
-[Service]
-Type=oneshot
-ExecStart=/bin/bash -c "plymouth show-splash 2>/dev/null || true; sleep 4"
-TimeoutStartSec=10
-RemainAfterExit=yes
-
-[Install]
-WantedBy=poweroff.target reboot.target halt.target
-EOF
-    # --- ods-enrollment-retry.service (Issue #5 fix: persistent enrollment) ---
-    # Adapted from legacy ods_esper_mgr.sh enrollment persistence pattern
-    cat > /etc/systemd/system/ods-enrollment-retry.service << 'EOF'
-[Unit]
-Description=ODS Enrollment Retry (Issue #5 - persistent cloud registration)
-After=network-online.target ods-webserver.service
-Wants=network-online.target
-
-[Service]
-Type=oneshot
-ExecStart=/bin/bash -c 'if [ ! -f /var/lib/ods/enrollment.flag ]; then curl -s -X POST http://localhost:8080/api/enroll | tee -a /var/log/ods-enrollment.log; fi'
-EOF
-
-    cat > /etc/systemd/system/ods-enrollment-retry.timer << 'EOF'
-[Unit]
-Description=Retry ODS Cloud enrollment every 30 minutes until registered
-
-[Timer]
-OnBootSec=120
-OnUnitActiveSec=1800
-
-[Install]
-WantedBy=timers.target
-EOF
+    # Copy all service and timer unit files from repo
+    for unit in \
+        ods-player-ATLAS.service \
+        ods-webserver.service \
+        ods-health-monitor.service \
+        ods-plymouth-hold.service \
+        ods-dpms-enforce.service \
+        ods-dpms-enforce.timer \
+        ods-display-config.service \
+        ods-hide-tty.service \
+        ods-shutdown-splash.service \
+        ods-enrollment-retry.service \
+        ods-enrollment-retry.timer; do
+        if [ -f "$REPO_SERVICES/$unit" ]; then
+            cp "$REPO_SERVICES/$unit" /etc/systemd/system/
+            log "  ✅ $unit deployed (from repo)"
+        else
+            log "  ⚠️  $unit not found in repo"
+        fi
+    done
 
     # Create /var/lib/ods/ for enrollment state (owned by signage — server.js writes here)
     mkdir -p /var/lib/ods
@@ -649,348 +486,66 @@ deploy_player_scripts() {
     log "🖥️  Step 6: Deploying player scripts (ATLAS)..."
 
     local REPO_SCRIPTS="/tmp/atlas_repo/scripts"
+    local REPO_CONFIG="/tmp/atlas_repo/config"
 
-    # --- start-player-ATLAS.sh (--app mode for overlay compatibility) ---
-    cat > /usr/local/bin/start-player-ATLAS.sh << 'SCRIPT'
-#!/bin/bash
-# ODS Player OS ATLAS — Start Player
-# Uses --app mode so overlay can stay above
-# Openbox handles maximization and decoration removal
-export DISPLAY=:0
-export HOME=/home/signage
-
-xhost +local: 2>/dev/null || true
-chown -R signage:signage /home/signage/.config/chromium 2>/dev/null
-rm -f /home/signage/.config/chromium/SingletonLock 2>/dev/null
-
-# Determine startup page based on internet connectivity
-START_URL="http://localhost:8080/network_setup.html"
-
-if curl -sf --max-time 3 http://connectivitycheck.gstatic.com/generate_204 >/dev/null 2>&1; then
-    echo "[ODS] Internet detected — skipping network_setup, loading player_link"
-    START_URL="http://localhost:8080/player_link.html"
-else
-    echo "[ODS] No internet — starting AP for network setup"
-    sudo /usr/local/bin/ods-setup-ap.sh start 2>/dev/null || true
-fi
-
-exec chromium --no-sandbox \
-  --app="$START_URL" \
-  --start-maximized \
-  --noerrdialogs \
-  --disable-infobars \
-  --disable-translate \
-  --no-first-run \
-  --disable-features=TranslateUI \
-  --disable-session-crashed-bubble \
-  --disable-component-update \
-  --check-for-update-interval=31536000 \
-  --autoplay-policy=no-user-gesture-required \
-  --force-device-scale-factor=${ODS_SCALE:-1} \
-  --remote-debugging-port=9222 \
-  --password-store=basic \
-  --credentials-enable-service=false \
-  --disable-save-password-bubble \
-  --disable-autofill-keyboard-accessory-view \
-  --default-background-color=000000 \
-  --force-dark-mode \
-  --disable-gpu-compositing
-SCRIPT
-    chmod +x /usr/local/bin/start-player-ATLAS.sh
+    # --- Deploy all player scripts from repo (OTA-updatable) ---
+    for script in \
+        start-player-ATLAS.sh \
+        ods-player-boot-wrapper.sh \
+        ods-phase-selector.sh \
+        ods-enrollment-boot.sh \
+        ods-setup-ap.sh \
+        ods-system-update.sh \
+        hide-tty.sh \
+        ods-auth-check.sh \
+        ods-hostname.sh \
+        ods-display-config.sh; do
+        if [ -f "$REPO_SCRIPTS/$script" ]; then
+            cp "$REPO_SCRIPTS/$script" /usr/local/bin/
+            chmod +x "/usr/local/bin/$script"
+            log "  ✅ $script deployed (from repo)"
+        else
+            log "  ⚠️  $script not found in repo"
+        fi
+    done
 
     # --- Chromium managed policy (suppresses password popup + autofill) ---
     mkdir -p /etc/chromium/policies/managed
-    cat > /etc/chromium/policies/managed/ods-player-ATLAS.json << 'EOF'
-{
-  "PasswordManagerEnabled": false,
-  "AutofillAddressEnabled": false,
-  "AutofillCreditCardEnabled": false,
-  "ImportSavedPasswords": false,
-  "CredentialProviderPromoEnabled": false,
-  "BrowserSignin": 0,
-  "CommandLineFlagSecurityWarningsEnabled": false
-}
-EOF
-    log "  ✅ Chromium managed policy deployed"
-
-    # --- ods-player-boot-wrapper.sh ---
-    # Copy from repo scripts/ instead of inline heredoc for maintainability
-    if [ -f "$REPO_SCRIPTS/ods-player-boot-wrapper.sh" ]; then
-        cp "$REPO_SCRIPTS/ods-player-boot-wrapper.sh" /usr/local/bin/ods-player-boot-wrapper.sh
-        log "  ✅ ods-player-boot-wrapper.sh deployed (from repo)"
-    else
-        log "  ⚠️  ods-player-boot-wrapper.sh not found in repo"
+    if [ -f "$REPO_CONFIG/chromium-policy.json" ]; then
+        cp "$REPO_CONFIG/chromium-policy.json" /etc/chromium/policies/managed/ods-player-ATLAS.json
+        log "  ✅ Chromium managed policy deployed (from repo)"
     fi
-    chmod +x /usr/local/bin/ods-player-boot-wrapper.sh
 
-
-    # --- ods-phase-selector.sh (Phase 2/3 boot gate) ---
-    cat > /usr/local/bin/ods-phase-selector.sh << 'SCRIPT'
-#!/bin/bash
-# ODS Phase Selector — Gates between Phase 2 (enrollment) and Phase 3 (production)
-ENROLLED_FLAG="/etc/ods/esper_enrolled.flag"
-LOG="/home/signage/ODS/logs/boot/phase_selector.log"
-log() { echo "$(date '+%Y-%m-%d %H:%M:%S.%3N') [PHASE] $1" | tee -a "$LOG"; }
-if [ -f "$ENROLLED_FLAG" ]; then
-    log "Phase 3: Enrolled flag found — launching production boot"
-    exec /usr/local/bin/ods-player-boot-wrapper.sh
-else
-    log "Phase 2: No enrolled flag — launching enrollment boot"
-    exec /usr/local/bin/ods-enrollment-boot.sh
-fi
-SCRIPT
-    chmod +x /usr/local/bin/ods-phase-selector.sh
-    log "  ✅ ods-phase-selector.sh deployed"
-
-    # --- ods-enrollment-boot.sh (Phase 2: sealed splash enrollment) ---
-    if [ -f "$REPO_SCRIPTS/ods-enrollment-boot.sh" ]; then
-        cp "$REPO_SCRIPTS/ods-enrollment-boot.sh" /usr/local/bin/ods-enrollment-boot.sh
-        log "  ✅ ods-enrollment-boot.sh deployed (from repo)"
-    fi
-    chmod +x /usr/local/bin/ods-enrollment-boot.sh 2>/dev/null || true
-
-    # --- ods-setup-ap.sh (WiFi AP management) ---
-    # Moved here from create_users() because the repo isn't cloned until deploy_atlas()
-    if [ -f "$REPO_SCRIPTS/ods-setup-ap.sh" ]; then
-        cp "$REPO_SCRIPTS/ods-setup-ap.sh" /usr/local/bin/ods-setup-ap.sh
-        chmod +x /usr/local/bin/ods-setup-ap.sh
-        log "  ✅ ods-setup-ap.sh deployed (from repo)"
-    else
-        log "  ⚠️  ods-setup-ap.sh not found in repo"
-    fi
+    # --- Allow signage user to run auth check as root (needed to read /etc/shadow) ---
+    echo "signage ALL=(root) NOPASSWD: /usr/local/bin/ods-auth-check.sh" > /etc/sudoers.d/ods-auth
+    chmod 440 /etc/sudoers.d/ods-auth
 
     # --- Enrollment state directory ---
     mkdir -p /etc/ods
     echo 0 > /etc/ods/enrollment_attempts
 
-    # --- hide-tty.sh ---
-    cat > /usr/local/bin/hide-tty.sh << 'SCRIPT'
-#!/bin/bash
-# Completely suppress tty1 output to prevent ANSI escape leaks
-exec > /dev/tty1 2>&1
-stty -echo -F /dev/tty1 2>/dev/null || true
-setterm --foreground black --background black --cursor off > /dev/tty1 2>/dev/null || true
-printf "\033[2J\033[H" > /dev/tty1 2>/dev/null || true
-printf "\033[?25l" > /dev/tty1 2>/dev/null || true
-SCRIPT
-    chmod +x /usr/local/bin/hide-tty.sh
-
-    # --- ods-auth-check.sh (Admin auth via su/PAM — yescrypt compatible) ---
-    # Python crypt+spwd removed in 3.13. openssl doesn't support yescrypt ($y$).
-    # su uses PAM which natively handles yescrypt. Tested working on live device.
-    cat > /usr/local/bin/ods-auth-check.sh << 'SCRIPT'
-#!/bin/bash
-# ODS Admin Auth — validates credentials via su (PAM-native, yescrypt-safe)
-USER="$1"; PASS="$2"
-[ -z "$USER" ] || [ -z "$PASS" ] && { echo "FAIL"; exit 1; }
-# su invokes PAM which handles any hash algorithm including yescrypt ($y$)
-if echo "$PASS" | su -c "echo OK" "$USER" 2>/dev/null | grep -q "^OK$"; then
-    echo "OK"
-else
-    echo "FAIL"
-fi
-SCRIPT
-    chmod +x /usr/local/bin/ods-auth-check.sh
-    # Allow signage user to run auth check as root (needed to read /etc/shadow)
-    echo "signage ALL=(root) NOPASSWD: /usr/local/bin/ods-auth-check.sh" > /etc/sudoers.d/ods-auth
-    chmod 440 /etc/sudoers.d/ods-auth
-
-    # --- ods-hostname.sh (MAC-based three-word hostname generator) ---
-    cat > /usr/local/bin/ods-hostname.sh << 'SCRIPT'
-#!/bin/bash
-# ODS Three-Word Hostname — deterministic MAC-to-words encoding
-# 256 words × 3 positions = 16,777,216 unique devices
-# Usage: ods-hostname.sh [generate|decode <name>]
-WORDS=(
-  # 0-63: Adjectives
-  brave bold calm cool dart dawn deep dusk echo fair fast firm fond free
-  glad gold good glow halt haze high huge idle iron jade jolly keen kind
-  last lean live long loud lush mint mild moon near neat next nice nova
-  open orca pace palm peak pine play plum pure quad rain rare real rich
-  # 64-127: Colors & Nature
-  ruby safe sage sand silk slim snow soft solo star stem sure tame teal
-  tide tiny trek true tune vale vast vine warm wave west wild wind wise
-  zero aqua ashe bark beam blue bone clay coal cyan dune fawn fern flax
-  foam grey husk iced iris jade kelp lake lava leaf lime lynx malt marl
-  # 128-191: Animals & Objects
-  mesa mint moss navy neon oaks opal palm pear pine pink plum pond reed
-  reef rose rust sage sand silk snow teak twig vine wren yarn zinc acorn
-  amber azure bloom brass cedar cherry cloud coral crane crest crown dart
-  delta drift ember flame frost gleam grain grove haven helix ivory jewel
-  # 192-255: More Nature & Friendly
-  knoll lapis lilac lunar maple marsh meadow mirth north ocean olive pearl
-  petal prism quail ridge river robin shell shore spark steam stone storm
-  swift thorn torch trail tulip vapor vivid waltz wheat whirl aspen birch
-  bliss cedar charm clover crystal dahlia forest garden gentle harbor haven
-)
-
-get_mac_bytes() {
-    # ALWAYS use ethernet MAC for consistent hostname (not wlan0 which differs in AP mode)
-    local mac=$(cat /sys/class/net/end0/address 2>/dev/null || cat /sys/class/net/eth0/address 2>/dev/null || echo "00:00:00:00:00:00")
-    # Take last 3 bytes
-    local b1=$(echo "$mac" | cut -d: -f4)
-    local b2=$(echo "$mac" | cut -d: -f5)
-    local b3=$(echo "$mac" | cut -d: -f6)
-    echo "$((16#$b1)) $((16#$b2)) $((16#$b3))"
-}
-
-case "${1:-generate}" in
-    generate)
-        read -r b1 b2 b3 <<< "$(get_mac_bytes)"
-        echo "${WORDS[$b1]}-${WORDS[$b2]}-${WORDS[$b3]}"
-        ;;
-    decode)
-        # Reverse: name → MAC bytes
-        IFS='-' read -r w1 w2 w3 <<< "$2"
-        for i in "${!WORDS[@]}"; do
-            [ "${WORDS[$i]}" = "$w1" ] && b1=$i
-            [ "${WORDS[$i]}" = "$w2" ] && b2=$i
-            [ "${WORDS[$i]}" = "$w3" ] && b3=$i
-        done
-        printf "xx:xx:xx:%02x:%02x:%02x\n" "$b1" "$b2" "$b3"
-        ;;
-    mac)
-        get_mac_bytes
-        ;;
-esac
-SCRIPT
-    chmod +x /usr/local/bin/ods-hostname.sh
-
     # --- .xprofile (Issue #4 fix: Layer 4 — login persistence) ---
-    cat > /home/signage/.xprofile << 'XPROFILE'
-# ODS Sleep Prevention (Layer 4 - login persistence)
-# Adapted from legacy ods_power_mgr.sh
-xset s off
-xset s noblank
-xset -dpms
-XPROFILE
-    chown signage:signage /home/signage/.xprofile
-    log "  ✅ Layer 4 .xprofile deployed"
-
-    # --- ods-display-config.sh (Upgrade B: dual-monitor + portrait) ---
-    cat > /usr/local/bin/ods-display-config.sh << 'SCRIPT'
-#!/bin/bash
-# ODS Display Configuration — reads layout JSON, applies xrandr
-export DISPLAY=:0
-CONFIG_DIR="/home/signage/ODS/config/layout"
-CURRENT_MODE=$(cat "$CONFIG_DIR/.current_mode" 2>/dev/null || echo "single_hd_landscape")
-
-CONFIG_FILE="$CONFIG_DIR/ods_mode_${CURRENT_MODE}.json"
-if [ ! -f "$CONFIG_FILE" ]; then
-    echo "[DISPLAY] No config for mode $CURRENT_MODE, defaulting to single screen"
-    exit 0
-fi
-
-# Read orientation from config
-ORIENTATION=$(jq -r '.monitor_config.orientation // "landscape"' "$CONFIG_FILE")
-NUM_SCREENS=$(jq -r '.windows | length' "$CONFIG_FILE")
-
-echo "[DISPLAY] Mode: $CURRENT_MODE, Orientation: $ORIENTATION, Screens: $NUM_SCREENS"
-
-# Apply xrandr based on config
-case "$ORIENTATION" in
-    portrait)
-        xrandr --output HDMI-1 --mode 1920x1080 --rotate left 2>/dev/null || true
-        if [ "$NUM_SCREENS" -ge 2 ]; then
-            xrandr --output HDMI-2 --mode 1920x1080 --rotate left --right-of HDMI-1 2>/dev/null || true
-        fi
-        ;;
-    landscape|*)
-        xrandr --output HDMI-1 --mode 1920x1080 --rotate normal 2>/dev/null || true
-        if [ "$NUM_SCREENS" -ge 2 ]; then
-            xrandr --output HDMI-2 --mode 1920x1080 --rotate normal --right-of HDMI-1 2>/dev/null || true
-        fi
-        ;;
-esac
-echo "[DISPLAY] xrandr configuration applied"
-SCRIPT
-    chmod +x /usr/local/bin/ods-display-config.sh
+    if [ -f "$REPO_CONFIG/xprofile" ]; then
+        cp "$REPO_CONFIG/xprofile" /home/signage/.xprofile
+        chown signage:signage /home/signage/.xprofile
+        log "  ✅ Layer 4 .xprofile deployed (from repo)"
+    fi
 
     # --- Openbox config (maximized, no decorations) ---
     mkdir -p /etc/ods
-    cat > /etc/ods/openbox-rc.xml << 'OBXML'
-<?xml version="1.0" encoding="UTF-8"?>
-<openbox_config xmlns="http://openbox.org/3.4/rc">
-  <resistance><strength>0</strength></resistance>
-  <focus><followMouse>no</followMouse></focus>
-  <placement><policy>Smart</policy></placement>
-  <desktops><number>1</number></desktops>
-
-  <!-- No decorations on any window by default (player mode) -->
-  <applications>
-    <application class="*">
-      <decor>no</decor>
-      <maximized>yes</maximized>
-    </application>
-    <!-- Boot overlay: fullscreen, always above Chromium -->
-    <application title="BOOT_OVERLAY">
-      <decor>no</decor>
-      <maximized>yes</maximized>
-      <layer>above</layer>
-      <fullscreen>yes</fullscreen>
-    </application>
-    <!-- Admin terminal: decorated, always-on-top, centered -->
-    <application class="XTerm" title="ODS Admin*">
-      <decor>yes</decor>
-      <maximized>no</maximized>
-      <layer>above</layer>
-      <size><width>800</width><height>600</height></size>
-      <position force="yes"><x>center</x><y>center</y></position>
-    </application>
-  </applications>
-
-  <!-- No keybindings (all keyboard handled by Chromium JavaScript) -->
-  <keyboard/>
-  <mouse/>
-</openbox_config>
-OBXML
-    log "  ✅ Openbox config deployed to /etc/ods/openbox-rc.xml"
+    if [ -f "$REPO_CONFIG/openbox-rc.xml" ]; then
+        cp "$REPO_CONFIG/openbox-rc.xml" /etc/ods/openbox-rc.xml
+        log "  ✅ Openbox config deployed (from repo)"
+    fi
 
     # --- Display layout configs (Upgrade B: initial modes) ---
     mkdir -p /home/signage/ODS/config/layout
-    cat > /home/signage/ODS/config/layout/ods_mode_single_hd_landscape.json << 'LJSON'
-{
-  "mode": "single_hd_landscape",
-  "description": "Single HD monitor, landscape, 1 fullscreen Chromium",
-  "windows": [
-    { "screen": 0, "position": "fullscreen", "url": "http://localhost:8080/network_setup.html" }
-  ],
-  "monitor_config": {
-    "orientation": "landscape",
-    "mapping": { "screen_0": "HDMI-1" }
-  }
-}
-LJSON
-    cat > /home/signage/ODS/config/layout/ods_mode_single_hd_portrait.json << 'LJSON'
-{
-  "mode": "single_hd_portrait",
-  "description": "Single HD monitor, portrait (rotated left)",
-  "windows": [
-    { "screen": 0, "position": "fullscreen", "url": "http://localhost:8080/network_setup.html" }
-  ],
-  "monitor_config": {
-    "orientation": "portrait",
-    "mapping": { "screen_0": "HDMI-1" }
-  }
-}
-LJSON
-    cat > /home/signage/ODS/config/layout/ods_mode_dual_hd_landscape.json << 'LJSON'
-{
-  "mode": "dual_hd_landscape",
-  "description": "Dual HD monitors, landscape, 1 Chromium per screen",
-  "windows": [
-    { "screen": 0, "position": "fullscreen", "url": "http://localhost:8080/network_setup.html" },
-    { "screen": 1, "position": "fullscreen", "url": "http://localhost:8080/network_setup.html" }
-  ],
-  "monitor_config": {
-    "orientation": "landscape",
-    "mapping": { "screen_0": "HDMI-1", "screen_1": "HDMI-2" }
-  }
-}
-LJSON
+    if [ -d "$REPO_CONFIG/layout" ]; then
+        cp "$REPO_CONFIG/layout"/*.json /home/signage/ODS/config/layout/ 2>/dev/null || true
+        log "  ✅ Display layout configs deployed (from repo)"
+    fi
     echo "single_hd_landscape" > /home/signage/ODS/config/layout/.current_mode
     chown -R signage:signage /home/signage/ODS/config
-    log "  ✅ Display layout configs deployed (3 modes)"
 
     log "  ✅ Player scripts deployed (Openbox + 4-layer sleep prevention)"
 }

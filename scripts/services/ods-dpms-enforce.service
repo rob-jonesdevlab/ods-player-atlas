@@ -1,0 +1,8 @@
+[Unit]
+Description=ODS DPMS Enforcement (Layer 5a - periodic sleep prevention)
+
+[Service]
+Type=oneshot
+User=root
+Environment=DISPLAY=:0
+ExecStart=/bin/bash -c "xset -dpms; xset s off; xset s noblank; xdotool key ctrl 2>/dev/null || true"

@@ -1,0 +1,9 @@
+{
+    "PasswordManagerEnabled": false,
+    "AutofillAddressEnabled": false,
+    "AutofillCreditCardEnabled": false,
+    "ImportSavedPasswords": false,
+    "CredentialProviderPromoEnabled": false,
+    "BrowserSignin": 0,
+    "CommandLineFlagSecurityWarningsEnabled": false
+}

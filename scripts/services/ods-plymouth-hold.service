@@ -1,0 +1,17 @@
+[Unit]
+Description=ODS Plymouth Hold - Block plymouth-quit until player is ready
+DefaultDependencies=no
+After=plymouth-start.service
+Before=plymouth-quit.service plymouth-quit-wait.service getty@tty1.service
+
+[Service]
+Type=oneshot
+# Wait for boot wrapper to signal it has taken over the display
+# /tmp/ods-player-os-starting-ATLAS is touched by the wrapper AFTER VT1 blackout
+# Max wait 90s to prevent boot hang
+ExecStart=/bin/bash -c 'for i in $(seq 1 180); do [ -f /tmp/ods-player-os-starting-ATLAS ] && break; sleep 0.5; done'
+RemainAfterExit=yes
+TimeoutStartSec=95
+
+[Install]
+WantedBy=sysinit.target

@@ -1,0 +1,19 @@
+[Unit]
+Description=ODS Player Boot (Phase Selector)
+# Start after webserver is up. Do NOT wait for plymouth-hold.
+# Phase selector routes to enrollment boot or production wrapper.
+After=ods-webserver.service
+Wants=ods-webserver.service
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/local/bin/ods-phase-selector.sh
+Restart=always
+RestartSec=10
+StartLimitIntervalSec=0
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

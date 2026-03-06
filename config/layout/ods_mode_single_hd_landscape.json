@@ -1,0 +1,17 @@
+{
+    "mode": "single_hd_landscape",
+    "description": "Single HD monitor, landscape, 1 fullscreen Chromium",
+    "windows": [
+        {
+            "screen": 0,
+            "position": "fullscreen",
+            "url": "http://localhost:8080/network_setup.html"
+        }
+    ],
+    "monitor_config": {
+        "orientation": "landscape",
+        "mapping": {
+            "screen_0": "HDMI-1"
+        }
+    }
+}
