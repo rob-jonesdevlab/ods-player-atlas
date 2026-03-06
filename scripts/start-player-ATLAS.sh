@@ -78,18 +78,37 @@ if [ "$DISPLAY_COUNT" -ge 2 ] && [ -f "$ENROLLMENT_FLAG" ]; then
     [ -z "$SECONDARY_OFFSET" ] && SECONDARY_OFFSET=1920
     PRIMARY_WIDTH=$SECONDARY_OFFSET
 
-    echo "[ODS] Dual display mode — launching second Chromium at offset ${PRIMARY_WIDTH}x0"
+    # Get secondary display resolution
+    SECONDARY_RES=$(xrandr 2>/dev/null | grep "${DISPLAYS[1]}" | grep -oP '\d+x\d+\+' | head -1 | sed 's/+$//')
+    SECONDARY_W=$(echo "$SECONDARY_RES" | cut -dx -f1)
+    SECONDARY_H=$(echo "$SECONDARY_RES" | cut -dx -f2)
+    [ -z "$SECONDARY_W" ] && SECONDARY_W=1920
+    [ -z "$SECONDARY_H" ] && SECONDARY_H=1080
+
+    echo "[ODS] Dual display mode — launching second Chromium at offset ${PRIMARY_WIDTH}x0 (${SECONDARY_W}x${SECONDARY_H})"
 
     # Second Chromium uses a separate user-data-dir to avoid conflicts
+    # NOTE: --start-maximized is NOT used here — Openbox's <maximized>yes</maximized>
+    # overrides --window-position, snapping the window to 0,0 on the primary display.
+    # Instead, use explicit --window-size and reposition after launch.
     chromium --app="http://localhost:8080/player_watermark.html?screen=1" \
       --user-data-dir=/home/signage/.config/chromium-screen2 \
       --window-position=${PRIMARY_WIDTH},0 \
-      --start-maximized \
+      --window-size=${SECONDARY_W},${SECONDARY_H} \
       --remote-debugging-port=9223 \
       "${CHROME_FLAGS[@]}" &
 
     SECONDARY_PID=$!
     echo "[ODS] Secondary Chromium launched (PID: $SECONDARY_PID)"
+
+    # Force reposition — Openbox maximization can override Chromium's --window-position
+    sleep 1.5
+    SEC_WID=$(xdotool search --name "Screen 1" 2>/dev/null | head -1)
+    if [ -n "$SEC_WID" ]; then
+        xdotool windowmove "$SEC_WID" "$PRIMARY_WIDTH" 0
+        xdotool windowsize "$SEC_WID" "$SECONDARY_W" "$SECONDARY_H"
+        echo "[ODS] Screen 1 repositioned to ${PRIMARY_WIDTH}x0 via xdotool (WID: $SEC_WID)"
+    fi
 fi
 
 # Wait for primary Chromium to exit
