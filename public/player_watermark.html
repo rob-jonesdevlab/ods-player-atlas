@@ -77,8 +77,10 @@
             setTimeout(checkForContent, pollDelay);
         }
 
-        // Signal boot wrapper that this page is ready (so overlay dismisses)
-        fetch('/api/loader-ready').catch(() => { });
+        // NOTE: Screen 1 does NOT signal /api/loader-ready.
+        // Only Screen 0 (player_status.html) should dismiss the boot overlay.
+        // If Screen 1 signals first (which it will — it's a simple static page),
+        // it causes premature overlay dismissal → white flash on Screen 0.
 
         // Block keyboard shortcuts except system shortcuts
         document.addEventListener('keydown', (e) => {
