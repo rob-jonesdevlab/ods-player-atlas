@@ -27,9 +27,14 @@
         .watermark {
             max-width: 80%;
             max-height: 80%;
-            opacity: 0.85;
+            opacity: 0;
+            transition: opacity 0.6s ease-in;
             user-select: none;
             -webkit-user-drag: none;
+        }
+
+        .watermark.visible {
+            opacity: 0.85;
         }
     </style>
 </head>
@@ -99,9 +104,28 @@
 
         document.addEventListener('contextmenu', e => e.preventDefault());
 
-        // Start polling after initial delay
-        console.log('[Watermark] Holding branded watermark — polling for content...');
-        setTimeout(checkForContent, INITIAL_POLL_DELAY);
+        // Wait for boot completion before showing watermark
+        // (syncs with Screen 0's overlay dismissal)
+        async function waitForBoot() {
+            try {
+                const resp = await fetch('/api/boot-status');
+                const data = await resp.json();
+                if (data.complete) {
+                    document.querySelector('.watermark').classList.add('visible');
+                    console.log('[Watermark] Boot complete — revealing watermark');
+                    // Start content polling after watermark is visible
+                    setTimeout(checkForContent, INITIAL_POLL_DELAY);
+                    return;
+                }
+            } catch (e) {
+                // Server not ready — keep polling
+            }
+            setTimeout(waitForBoot, 500);
+        }
+
+        // Start polling for boot completion
+        console.log('[Watermark] Waiting for boot completion before reveal...');
+        waitForBoot();
     </script>
 </body>
 

@@ -164,6 +164,12 @@ app.post('/api/signal-ready', (req, res) => {
     res.json({ success: true });
 });
 
+// Boot status — Screen 1 polls this to sync watermark reveal with Screen 0
+app.get('/api/boot-status', (req, res) => {
+    const complete = fs.existsSync('/tmp/ods-boot-complete');
+    res.json({ complete });
+});
+
 // ========================================
 // START SERVER
 // ========================================

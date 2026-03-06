@@ -1192,7 +1192,7 @@ XORGCFG
     # Also update armbianEnv.txt if it exists (belt-and-suspenders)
     if [ -f /boot/armbianEnv.txt ]; then
         if grep -q "^extraargs=" /boot/armbianEnv.txt; then
-            sed -i 's/^extraargs=.*/extraargs=cma=256M splash quiet loglevel=3 plymouth.ignore-serial-consoles consoleblank=0 vt.global_cursor_default=0/' /boot/armbianEnv.txt
+            sed -i 's/^extraargs=.*/extraargs=cma=256M splash quiet loglevel=3 plymouth.ignore-serial-consoles consoleblank=0 vt.global_cursor_default=0 video=HDMI-A-1:1920x1080@60/' /boot/armbianEnv.txt
         else
             echo "extraargs=cma=256M splash quiet loglevel=3 plymouth.ignore-serial-consoles consoleblank=0 vt.global_cursor_default=0" >> /boot/armbianEnv.txt
         fi

@@ -67,12 +67,17 @@ xhost +local: 2>/dev/null || true
 touch "$STOP_FBI"
 kill $FBI_ANIM_PID 2>/dev/null || true
 log "Xorg ready — fbi animation stopped"
+# ── DIAGNOSTIC: Xorg initial state ──
+log "[DIAG] xrandr after Xorg start:"
+DISPLAY=:0 xrandr 2>/dev/null | grep -E 'connected|\*' | while read -r _line; do log "[DIAG]   $_line"; done
 XORG_RES=$(DISPLAY=:0 xrandr 2>/dev/null | grep '*' | head -1 | awk '{print $1}' || echo "unknown")
 log "Xorg display: ${XORG_RES} (DRM modesetting driver)"
+log "[DIAG] Splash asset: $(wc -c < "$SPLASH_IMG" 2>/dev/null || echo 0) bytes, FBI raw: $(wc -c < "$ANIM_DIR/fbi_boot_1.raw" 2>/dev/null || echo 0) bytes"
 
-# Paint splash on root window immediately
+# Paint splash on root window IMMEDIATELY — no xrandr before this!
+# (Per KI: "Do not apply xrandr between Xorg startup and first splash paint")
 DISPLAY=:0 display -window root "$SPLASH_IMG" 2>/dev/null
-log "Root window splash painted"
+log "Root window splash painted (${XORG_RES} root, splash=$SPLASH_IMG)"
 
 # ── STAGE 4: "Starting ODS services" ANIMATION (1.5s) ────────────────
 for _f in 1 2 3 4 5; do
@@ -81,38 +86,36 @@ for _f in 1 2 3 4 5; do
 done
 log "Starting ODS services animation complete"
 
-# ── STAGE 5: SETUP (Openbox, config, dynamic resolution) ─────────────
+# ── STAGE 5: SETUP (Openbox, display config, metrics) ────────────────
 xset -dpms 2>/dev/null || true
 xset s off 2>/dev/null || true
 xset s noblank 2>/dev/null || true
 openbox --config-file /etc/ods/openbox-rc.xml &
 unclutter -idle 0.01 -root &
 sleep 0.5
-log "Openbox started"
+# Apply display config AFTER Openbox (proven e417033 pattern).
+# Mode changes happen here, covered by Stage 6 overlay.
+/usr/local/bin/ods-display-config.sh 2>/dev/null || true
+log "Openbox + display config applied"
+# ── DIAGNOSTIC: xrandr after display config ──
+log "[DIAG] xrandr after display-config:"
+DISPLAY=:0 xrandr 2>/dev/null | grep -E 'connected|\*' | while read -r _line; do log "[DIAG]   $_line"; done
 
-# ── Dynamic resolution upscale ────────────────────────────────────────
-# Boot ran at HD (kernel video= forces 1080p for DRM/Plymouth/FBI).
-# Now detect native EDID resolution and upscale to it.
-# This happens behind the root-window splash, before the overlay starts.
-NATIVE_RES=$(xrandr 2>/dev/null | grep 'HDMI-1' -A1 | grep '+' | awk '{print $1}')
-CURRENT_RES=$(xrandr 2>/dev/null | grep '*' | head -1 | awk '{print $1}')
-if [ -n "$NATIVE_RES" ] && [ "$NATIVE_RES" != "$CURRENT_RES" ]; then
-    log "Upscaling: ${CURRENT_RES} → ${NATIVE_RES} (native EDID)"
-    xrandr --output HDMI-1 --mode "$NATIVE_RES" --pos 0x0 2>/dev/null || true
-    sleep 0.3
-fi
-
-# Get actual HDMI-1 width after any mode change (for HDMI-2 positioning)
-HDMI1_W=$(xrandr 2>/dev/null | grep '^HDMI-1' | grep -oP '\d+x\d+\+' | head -1 | cut -dx -f1)
+# Compute screen metrics AFTER display config
+HDMI1_W=$(DISPLAY=:0 xrandr 2>/dev/null | grep '^HDMI-1' | grep -oP '\d+x\d+\+' | head -1 | cut -dx -f1)
 [ -z "$HDMI1_W" ] && HDMI1_W=1920
-
-# Position second display with explicit --pos (fixes --right-of gap bug)
-if xrandr 2>/dev/null | grep -q 'HDMI-2 connected'; then
-    xrandr --output HDMI-2 --preferred --pos ${HDMI1_W}x0 2>/dev/null || true
-    log "HDMI-2 positioned at ${HDMI1_W}x0"
+HDMI2_RES=""
+if DISPLAY=:0 xrandr 2>/dev/null | grep -q 'HDMI-2 connected'; then
+    HDMI2_RES=$(DISPLAY=:0 xrandr 2>/dev/null | grep '^HDMI-2' | grep -oP '\d+x\d+\+' | head -1 | sed 's/+$//' )
+    [ -z "$HDMI2_RES" ] && HDMI2_RES="1920x1080"
+    # If HDMI-2 is mirrored (at +0+0), extend it to the right of HDMI-1
+    HDMI2_POS=$(DISPLAY=:0 xrandr 2>/dev/null | grep '^HDMI-2' | grep -oP '\d+x\d+\+\d+\+\d+' | head -1)
+    if echo "$HDMI2_POS" | grep -q '+0+0'; then
+        log "HDMI-2 mirrored — extending to right of HDMI-1 at ${HDMI1_W}x0"
+        DISPLAY=:0 xrandr --output HDMI-2 --mode "$HDMI2_RES" --pos ${HDMI1_W}x0 2>/dev/null || true
+    fi
 fi
-
-SCREEN_W=$(xrandr 2>/dev/null | grep '*' | head -1 | awk '{print $1}' | cut -dx -f1)
+SCREEN_W=$(DISPLAY=:0 xrandr 2>/dev/null | grep '*' | head -1 | awk '{print $1}' | cut -dx -f1)
 [ -z "$SCREEN_W" ] || [ "$SCREEN_W" -eq 0 ] 2>/dev/null && SCREEN_W=1920
 if [ "$SCREEN_W" -ge 3000 ]; then
     export ODS_SCALE=2
@@ -121,8 +124,8 @@ elif [ "$SCREEN_W" -ge 2000 ]; then
 else
     export ODS_SCALE=1
 fi
-SCREEN_FULL=$(xrandr 2>/dev/null | grep '*' | head -1 | awk '{print $1}' || echo "unknown")
-log "Screen: ${SCREEN_W}px (${SCREEN_FULL}), Scale: ${ODS_SCALE}"
+SCREEN_FULL=$(DISPLAY=:0 xrandr 2>/dev/null | grep '*' | head -1 | awk '{print $1}' || echo "1920x1080")
+log "Screen: ${SCREEN_W}px (${SCREEN_FULL}), HDMI-2: ${HDMI2_RES:-none}, Scale: ${ODS_SCALE}"
 
 export GTK_THEME="Adwaita:dark"
 export GTK2_RC_FILES="/usr/share/themes/Adwaita-dark/gtk-2.0/gtkrc"
@@ -135,48 +138,76 @@ GTK
 log "Config complete"
 
 # ── STAGE 6: ANIMATED OVERLAY + CHROMIUM ─────────────────────────────
-rm -f /tmp/ods-loader-ready
+rm -f /tmp/ods-loader-ready /tmp/ods-boot-complete
 
-# Pre-resize first frame to actual screen resolution, then display
-# (4K PNGs must be resized when display runs at 1080p or 2K)
-log "Overlay: creating ${SCREEN_FULL:-3840x2160} overlay from 4K frame"
-convert "$ANIM_DIR/overlay_launch_1.png" -resize "${SCREEN_FULL:-3840x2160}!" /tmp/overlay_resized.png 2>/dev/null
+# Screen 0 overlay — use HD overlay directly (no resize needed at 1080p)
+log "Overlay: creating ${SCREEN_FULL} overlay"
 DISPLAY=:0 display -immutable -title BOOT_OVERLAY \
-  -geometry ${SCREEN_FULL:-3840x2160}+0+0 \
-  /tmp/overlay_resized.png 2>/dev/null &
+  -geometry ${SCREEN_FULL}+0+0 \
+  "$ANIM_DIR/overlay_launch_1.png" 2>/dev/null &
 OVERLAY_PID=$!
 sleep 0.3
 OVERLAY_WID=$(DISPLAY=:0 xdotool search --name BOOT_OVERLAY 2>/dev/null | head -1)
 [ -n "$OVERLAY_WID" ] && DISPLAY=:0 xdotool windowraise "$OVERLAY_WID" 2>/dev/null
-log "Overlay created (PID: $OVERLAY_PID, WID: $OVERLAY_WID, Res: ${SCREEN_FULL})"
+log "Screen 0 overlay created (PID: $OVERLAY_PID, WID: $OVERLAY_WID, Res: ${SCREEN_FULL})"
+
+# Screen 1 overlay (HDMI-2, secondary)
+OVERLAY2_PID=""
+OVERLAY2_WID=""
+if [ -n "$HDMI2_RES" ]; then
+    HDMI2_W=$(echo "$HDMI2_RES" | cut -dx -f1)
+    HDMI2_H=$(echo "$HDMI2_RES" | cut -dx -f2)
+    DISPLAY=:0 display -immutable -title BOOT_OVERLAY2 \
+      -geometry ${HDMI2_RES}+${HDMI1_W}+0 \
+      "$ANIM_DIR/overlay_launch_1.png" 2>/dev/null &
+    OVERLAY2_PID=$!
+    sleep 0.5
+    for _try in 1 2 3; do
+        OVERLAY2_WID=$(DISPLAY=:0 xdotool search --name BOOT_OVERLAY2 2>/dev/null | head -1)
+        [ -n "$OVERLAY2_WID" ] && break
+        sleep 0.3
+    done
+    if [ -n "$OVERLAY2_WID" ]; then
+        DISPLAY=:0 xdotool windowmove "$OVERLAY2_WID" "$HDMI1_W" 0 2>/dev/null
+        DISPLAY=:0 xdotool windowsize "$OVERLAY2_WID" "$HDMI2_W" "$HDMI2_H" 2>/dev/null
+        DISPLAY=:0 xdotool windowraise "$OVERLAY2_WID" 2>/dev/null
+    fi
+    log "Screen 1 overlay created (PID: $OVERLAY2_PID, WID: ${OVERLAY2_WID:-NONE}, Res: ${HDMI2_RES}, X: ${HDMI1_W})"
+fi
 
 # Launch Chromium behind overlay
 /usr/local/bin/start-player-ATLAS.sh &
 PLAYER_PID=$!
 log "Chromium launched behind overlay (PID: $PLAYER_PID)"
 
-# Re-raise overlay
+# Re-raise both overlays
 sleep 0.5
 [ -n "$OVERLAY_WID" ] && DISPLAY=:0 xdotool windowraise "$OVERLAY_WID" 2>/dev/null
-log "Overlay re-raised"
+[ -n "$OVERLAY2_WID" ] && DISPLAY=:0 xdotool windowraise "$OVERLAY2_WID" 2>/dev/null
+log "Overlays re-raised"
 
-# Animate "Launching OS" on the overlay window
-# Pre-resize each frame then display into the existing overlay window
+# Animate "Launching OS" on BOTH overlay windows in sync
+# With HD assets, overlay PNGs are 1920x1080 — display directly, no convert
 (
     while [ ! -f /tmp/ods-loader-ready ]; do
         for _d in 1 2 3 4 5; do
             [ -f /tmp/ods-loader-ready ] && break 2
+            # Screen 0
             if [ -n "$OVERLAY_WID" ]; then
                 DISPLAY=:0 xdotool windowraise "$OVERLAY_WID" 2>/dev/null
-                convert "$ANIM_DIR/overlay_launch_${_d}.png" -resize "${SCREEN_FULL:-3840x2160}!" png:- 2>/dev/null | \
-                    DISPLAY=:0 display -window "$OVERLAY_WID" - 2>/dev/null
+                DISPLAY=:0 display -window "$OVERLAY_WID" "$ANIM_DIR/overlay_launch_${_d}.png" 2>/dev/null
+            fi
+            # Screen 1
+            if [ -n "$OVERLAY2_WID" ]; then
+                DISPLAY=:0 xdotool windowraise "$OVERLAY2_WID" 2>/dev/null
+                DISPLAY=:0 display -window "$OVERLAY2_WID" "$ANIM_DIR/overlay_launch_${_d}.png" 2>/dev/null
             fi
             sleep 0.4
         done
     done
 ) &
 ANIM_PID=$!
-log "Launching OS animation started (on overlay)"
+log "Launching OS animation started (synced on both screens)"
 
 # ── STAGE 7: WAIT FOR PAGE READY ─────────────────────────────────────
 TIMEOUT=60
@@ -196,12 +227,16 @@ done
 
 # Wait 1s for page paint to complete
 sleep 1
-log "Buffer complete — killing overlay"
+log "Buffer complete — killing overlays"
 
-# Kill overlay — reveal fully-rendered page
+# Kill BOTH overlays simultaneously — synced reveal on both screens
 kill $OVERLAY_PID 2>/dev/null || true
 kill $ANIM_PID 2>/dev/null || true
-log "Overlay killed — page visible"
+[ -n "$OVERLAY2_PID" ] && kill $OVERLAY2_PID 2>/dev/null || true
+
+# Signal boot complete — Screen 1 watermark polls this to sync its reveal
+touch /tmp/ods-boot-complete
+log "Both overlays killed + boot-complete signaled — pages visible"
 
 # ── STAGE 8: CLEANUP ─────────────────────────────────────────────────
 plymouth quit 2>/dev/null || true
