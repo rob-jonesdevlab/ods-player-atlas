@@ -85,65 +85,41 @@ touch "$STOP_FBI"
 kill $FBI_ANIM_PID 2>/dev/null || true
 log "Xorg ready — fbi animation stopped"
 
-# Paint full-screen splash on root IMMEDIATELY — no delay between FBI kill and splash!
-# NOTE: Do NOT use watermark.png here — it's 549x72 and ImageMagick tiles small
-# images across the root window, causing a visible flash. Use splash_ods_1.png (1920x1080).
+# ── ALL DISPLAY CONFIGURATION HAPPENS NOW (screen is black) ──────────
+# DRM modesets physically blank displays for ~100ms. By running them
+# here (before any splash is painted), the blanks are invisible.
 DISPLAY=:0 xsetroot -solid black 2>/dev/null || true
 snap "after_fbi_kill_xsetroot"
-DISPLAY=:0 display -window root "$ANIM_DIR/splash_ods_1.png" 2>/dev/null
-snap "after_splash_paint"
-XORG_RES=$(DISPLAY=:0 xrandr 2>/dev/null | grep '*' | head -1 | awk '{print $1}' || echo "unknown")
-log "Root window splash painted (${XORG_RES} root, splash=$ANIM_DIR/splash_ods_1.png)"
 
-# ── DIAGNOSTIC: Xorg initial state (non-blocking, after splash is visible) ──
-log "[DIAG] xrandr after Xorg start:"
-DISPLAY=:0 xrandr 2>/dev/null | grep -E 'connected|\*' | while read -r _line; do log "[DIAG]   $_line"; done
-log "[DIAG] Splash asset: $(wc -c < "$SPLASH_IMG" 2>/dev/null || echo 0) bytes, FBI raw: $(wc -c < "$ANIM_DIR/fbi_boot_1.raw" 2>/dev/null || echo 0) bytes"
-
-# ── STAGE 4: "Starting ODS services" ANIMATION (1.5s) ────────────────
-for _f in 1 2 3 4 5; do
-    DISPLAY=:0 display -window root "$ANIM_DIR/splash_ods_${_f}.png" 2>/dev/null
-    sleep 0.3
-done
-log "Starting ODS services animation complete"
-snap "after_services_anim"
-
-# ── STAGE 5: SETUP (Openbox, display config, metrics) ────────────────
-# NOTE: Do NOT xsetroot black here — splash stays visible on root until overlay covers it
-# (proven e417033 pattern: zero root-clearing between splash and overlay)
-xset -dpms 2>/dev/null || true
-xset s off 2>/dev/null || true
-xset s noblank 2>/dev/null || true
-openbox --config-file /etc/ods/openbox-rc.xml &
-unclutter -idle 0.01 -root &
-sleep 0.5
-snap "after_openbox_start"
-# NOTE: Do NOT xsetroot black here — Openbox does not alter root (tested e417033)
-# Apply display config AFTER Openbox (proven e417033 pattern).
+# Apply layout config (may trigger xrandr modesets — safe, screen is black)
 /usr/local/bin/ods-display-config.sh 2>/dev/null || true
-log "Openbox + display config applied"
-snap "after_display_config"
-# ── DIAGNOSTIC: xrandr after display config ──
-log "[DIAG] xrandr after display-config:"
-DISPLAY=:0 xrandr 2>/dev/null | grep -E 'connected|\*' | while read -r _line; do log "[DIAG]   $_line"; done
+sleep 0.3   # Let DRM state settle after modeset before HDMI-2 detection
+log "Display config applied (during black screen)"
 
-# Compute screen metrics AFTER display config
+# Detect + extend HDMI-2 if mirrored (modeset during black screen)
 HDMI1_W=$(DISPLAY=:0 xrandr 2>/dev/null | grep '^HDMI-1' | grep -oP '\d+x\d+\+' | head -1 | cut -dx -f1)
 [ -z "$HDMI1_W" ] && HDMI1_W=1920
 HDMI2_RES=""
 if DISPLAY=:0 xrandr 2>/dev/null | grep -q 'HDMI-2 connected'; then
     HDMI2_RES=$(DISPLAY=:0 xrandr 2>/dev/null | grep '^HDMI-2' | grep -oP '\d+x\d+\+' | head -1 | sed 's/+$//' )
     [ -z "$HDMI2_RES" ] && HDMI2_RES="1920x1080"
-    # If HDMI-2 is mirrored (at +0+0), extend it to the right of HDMI-1
     HDMI2_POS=$(DISPLAY=:0 xrandr 2>/dev/null | grep '^HDMI-2' | grep -oP '\d+x\d+\+\d+\+\d+' | head -1)
     if echo "$HDMI2_POS" | grep -q '+0+0'; then
         log "HDMI-2 mirrored — extending to right of HDMI-1 at ${HDMI1_W}x0"
         DISPLAY=:0 xrandr --output HDMI-2 --mode "$HDMI2_RES" --pos ${HDMI1_W}x0 2>/dev/null || true
-        # Re-blacken root after xrandr extension (mode change invalidates xsetroot)
-        DISPLAY=:0 xsetroot -solid black 2>/dev/null || true
-        snap "after_hdmi2_extend"
     fi
 fi
+
+# Re-blacken root after all modesets, then take stock
+DISPLAY=:0 xsetroot -solid black 2>/dev/null || true
+snap "after_display_setup"
+
+# ── DIAGNOSTIC: xrandr after all display configuration ──
+log "[DIAG] xrandr after display setup:"
+DISPLAY=:0 xrandr 2>/dev/null | grep -E 'connected|\*' | while read -r _line; do log "[DIAG]   $_line"; done
+log "[DIAG] Splash asset: $(wc -c < "$SPLASH_IMG" 2>/dev/null || echo 0) bytes, FBI raw: $(wc -c < "$ANIM_DIR/fbi_boot_1.raw" 2>/dev/null || echo 0) bytes"
+
+# Compute screen metrics (display is now stable — no more modesets)
 SCREEN_W=$(DISPLAY=:0 xrandr 2>/dev/null | grep '*' | head -1 | awk '{print $1}' | cut -dx -f1)
 [ -z "$SCREEN_W" ] || [ "$SCREEN_W" -eq 0 ] 2>/dev/null && SCREEN_W=1920
 if [ "$SCREEN_W" -ge 3000 ]; then
@@ -155,6 +131,34 @@ else
 fi
 SCREEN_FULL=$(DISPLAY=:0 xrandr 2>/dev/null | grep '*' | head -1 | awk '{print $1}' || echo "1920x1080")
 log "Screen: ${SCREEN_W}px (${SCREEN_FULL}), HDMI-2: ${HDMI2_RES:-none}, Scale: ${ODS_SCALE}"
+
+# ── NOW PAINT SPLASH (display is stable — no more DRM modesets) ──────
+# NOTE: Do NOT use watermark.png here — it's 549x72 and ImageMagick tiles small
+# images across the root window, causing a visible flash. Use splash_ods_1.png (1920x1080).
+DISPLAY=:0 display -window root "$ANIM_DIR/splash_ods_1.png" 2>/dev/null
+snap "after_splash_paint"
+XORG_RES=$(DISPLAY=:0 xrandr 2>/dev/null | grep '*' | head -1 | awk '{print $1}' || echo "unknown")
+log "Root window splash painted (${XORG_RES} root, splash=$ANIM_DIR/splash_ods_1.png)"
+
+# ── STAGE 4: "Starting ODS services" ANIMATION (1.5s) ────────────────
+for _f in 1 2 3 4 5; do
+    DISPLAY=:0 display -window root "$ANIM_DIR/splash_ods_${_f}.png" 2>/dev/null
+    sleep 0.3
+done
+log "Starting ODS services animation complete"
+snap "after_services_anim"
+
+# ── STAGE 5: SETUP (Openbox, GTK) ────────────────────────────────────
+# NOTE: No display config here — all modesets already done above.
+# Splash stays visible on root until overlay covers it (e417033 pattern).
+xset -dpms 2>/dev/null || true
+xset s off 2>/dev/null || true
+xset s noblank 2>/dev/null || true
+openbox --config-file /etc/ods/openbox-rc.xml &
+unclutter -idle 0.01 -root &
+sleep 0.5
+snap "after_openbox_start"
+log "Openbox started"
 
 export GTK_THEME="Adwaita:dark"
 export GTK2_RC_FILES="/usr/share/themes/Adwaita-dark/gtk-2.0/gtkrc"
