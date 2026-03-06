@@ -81,15 +81,36 @@ for _f in 1 2 3 4 5; do
 done
 log "Starting ODS services animation complete"
 
-# ── STAGE 5: SETUP (Openbox, config) ─────────────────────────────────
+# ── STAGE 5: SETUP (Openbox, config, dynamic resolution) ─────────────
 xset -dpms 2>/dev/null || true
 xset s off 2>/dev/null || true
 xset s noblank 2>/dev/null || true
 openbox --config-file /etc/ods/openbox-rc.xml &
 unclutter -idle 0.01 -root &
 sleep 0.5
-/usr/local/bin/ods-display-config.sh 2>/dev/null || true
 log "Openbox started"
+
+# ── Dynamic resolution upscale ────────────────────────────────────────
+# Boot ran at HD (kernel video= forces 1080p for DRM/Plymouth/FBI).
+# Now detect native EDID resolution and upscale to it.
+# This happens behind the root-window splash, before the overlay starts.
+NATIVE_RES=$(xrandr 2>/dev/null | grep 'HDMI-1' -A1 | grep '+' | awk '{print $1}')
+CURRENT_RES=$(xrandr 2>/dev/null | grep '*' | head -1 | awk '{print $1}')
+if [ -n "$NATIVE_RES" ] && [ "$NATIVE_RES" != "$CURRENT_RES" ]; then
+    log "Upscaling: ${CURRENT_RES} → ${NATIVE_RES} (native EDID)"
+    xrandr --output HDMI-1 --mode "$NATIVE_RES" --pos 0x0 2>/dev/null || true
+    sleep 0.3
+fi
+
+# Get actual HDMI-1 width after any mode change (for HDMI-2 positioning)
+HDMI1_W=$(xrandr 2>/dev/null | grep '^HDMI-1' | grep -oP '\d+x\d+\+' | head -1 | cut -dx -f1)
+[ -z "$HDMI1_W" ] && HDMI1_W=1920
+
+# Position second display with explicit --pos (fixes --right-of gap bug)
+if xrandr 2>/dev/null | grep -q 'HDMI-2 connected'; then
+    xrandr --output HDMI-2 --preferred --pos ${HDMI1_W}x0 2>/dev/null || true
+    log "HDMI-2 positioned at ${HDMI1_W}x0"
+fi
 
 SCREEN_W=$(xrandr 2>/dev/null | grep '*' | head -1 | awk '{print $1}' | cut -dx -f1)
 [ -z "$SCREEN_W" ] || [ "$SCREEN_W" -eq 0 ] 2>/dev/null && SCREEN_W=1920

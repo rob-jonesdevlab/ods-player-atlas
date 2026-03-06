@@ -39,6 +39,7 @@ let isOnline = false;
 let heartbeatTimer = null;
 let configPollTimer = null;
 let onContentReady = null;  // Callback for renderer notification
+let backoffUntil = 0;      // Timestamp until which API calls are blocked (429 backoff)
 
 // ============================================================
 // ENROLLMENT DATA
@@ -445,6 +446,11 @@ async function fetchLiveContent() {
             source: 'live'
         };
     } catch (error) {
+        // Detect 429 rate-limit and enforce 30s cooldown
+        if (error.message && error.message.includes('429')) {
+            backoffUntil = Date.now() + 30000;
+            console.warn('[CloudSync] Rate-limited (429) — backoff for 30s');
+        }
         console.error('[CloudSync] Failed to fetch live content:', error.message);
         return null;
     }

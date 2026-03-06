@@ -81,7 +81,7 @@ if [ "$DISPLAY_COUNT" -ge 2 ] && [ -f "$ENROLLMENT_FLAG" ]; then
     echo "[ODS] Dual display mode — launching second Chromium at offset ${PRIMARY_WIDTH}x0"
 
     # Second Chromium uses a separate user-data-dir to avoid conflicts
-    chromium --app="http://localhost:8080/player_content_manager.html?screen=1" \
+    chromium --app="http://localhost:8080/player_watermark.html?screen=1" \
       --user-data-dir=/home/signage/.config/chromium-screen2 \
       --window-position=${PRIMARY_WIDTH},0 \
       --start-maximized \

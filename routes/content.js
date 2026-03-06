@@ -79,9 +79,18 @@ router.post('/cache/clean', (req, res) => {
 
 // ─── Player Content Delivery ────────────────────────────────────────────────
 
+// Rate limit backoff state (shared with cloud-sync module)
+let backoffUntil = 0;
+
 // GET /player/content — Smart decision tree for fast boot
 // Priority: cache (if unchanged) → live (if changed or no cache) → offline (if no network)
 router.get('/player/content', async (req, res) => {
+    // If we're in backoff from a 429, return immediately with retry hint
+    if (Date.now() < backoffUntil) {
+        const retryIn = Math.ceil((backoffUntil - Date.now()) / 1000);
+        console.log(`[Content] ⏸️ Rate-limit backoff — retry in ${retryIn}s`);
+        return res.json({ hasContent: false, playlist: null, bootMode: 'backoff', retryAfter: retryIn });
+    }
     try {
         const cachedContent = cloudSync.getContentForRenderer();
         const cacheReady = cloudSync.isCacheReady();
@@ -128,6 +137,10 @@ router.get('/player/content', async (req, res) => {
 
     } catch (error) {
         console.error('[Content] Decision tree error:', error.message);
+        // Detect 429 in error chain and set backoff
+        if (error.message && error.message.includes('429')) {
+            backoffUntil = Date.now() + 30000;
+        }
         const cachedContent = cloudSync.getContentForRenderer();
         if (cachedContent) {
             return res.json({ hasContent: true, playlist: cachedContent, bootMode: 'error-fallback' });
@@ -186,8 +199,8 @@ router.get('/device/info', (req, res) => {
                 let device_name = '';
                 try {
                     const flagData = JSON.parse(fs.readFileSync('/var/lib/ods/enrollment.flag', 'utf8'));
-                    account_name = flagData.account_name || '';
-                    device_name = flagData.device_name || '';
+                    account_name = flagData.account_name || 'Registering...';
+                    device_name = flagData.device_name || 'Registering...';
                 } catch (e) { /* not paired yet */ }
 
                 res.json({

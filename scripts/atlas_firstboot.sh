@@ -1177,6 +1177,11 @@ XORGCFG
         if ! echo "$cmdline" | grep -q "systemd.show_status"; then
             cmdline="$cmdline systemd.show_status=false"
         fi
+        # Force DRM/Plymouth/FBI to initialize at HD (prevents resolution flash)
+        # Boot wrapper will upscale to native EDID after Openbox starts
+        if ! echo "$cmdline" | grep -q "video=HDMI-A-1"; then
+            cmdline="$cmdline video=HDMI-A-1:1920x1080@60"
+        fi
         # Upgrade loglevel to 0 (completely silent — no kernel output at all)
         cmdline=$(echo "$cmdline" | sed 's/loglevel=[0-9]*/loglevel=0/')
 
