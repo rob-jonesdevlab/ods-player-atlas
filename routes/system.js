@@ -143,6 +143,37 @@ router.post('/shutdown', (req, res) => {
     setTimeout(() => exec('sudo /usr/sbin/shutdown -h now'), 2000);
 });
 
+// ─── OTA System Update ──────────────────────────────────────────────────────
+
+// Internal endpoint — called by ods-system-update.sh to report progress
+// The cloud-sync.js deploy_system_update handler relays this to Archaeopteryx
+router.post('/update-status', express.json(), (req, res) => {
+    const { status, detail } = req.body;
+    console.log(`[SYSTEM UPDATE] Status: ${status} — ${detail || ''}`);
+    // This endpoint is a fire-and-forget relay point.
+    // cloud-sync.js is the primary status reporter via Socket.IO.
+    res.json({ received: true, status });
+});
+
+// Manual trigger — start a system update (SSH fallback / local trigger)
+router.post('/update', (req, res) => {
+    console.log('[SYSTEM UPDATE] Manual update trigger received');
+    const updateScript = '/home/signage/ODS/scripts/ods-system-update.sh';
+
+    if (!fs.existsSync(updateScript)) {
+        return res.status(404).json({ error: 'Update script not found', path: updateScript });
+    }
+
+    // Respond immediately, run update in background
+    res.json({ success: true, message: 'System update started. Monitor logs for progress.' });
+
+    const child = spawn('bash', [updateScript], {
+        detached: true,
+        stdio: 'ignore'
+    });
+    child.unref();
+});
+
 // ─── Unpair ─────────────────────────────────────────────────────────────────
 router.post('/unpair', async (req, res) => {
     console.log('[UNPAIR] Device unpair initiated');

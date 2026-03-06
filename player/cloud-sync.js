@@ -40,6 +40,7 @@ let heartbeatTimer = null;
 let configPollTimer = null;
 let onContentReady = null;  // Callback for renderer notification
 let backoffUntil = 0;      // Timestamp until which API calls are blocked (429 backoff)
+let updateInProgress = false; // Guard against concurrent OTA updates
 
 // ============================================================
 // ENROLLMENT DATA
@@ -278,6 +279,56 @@ function start(options = {}) {
         doSync();
     });
 
+    // --- System Update Push (OTA) ---
+
+    socket.on('deploy_system_update', (data) => {
+        console.log(`[CloudSync] 🔄 System update push received:`, data);
+
+        if (updateInProgress) {
+            console.log('[CloudSync] Update already in progress, ignoring');
+            socket.emit('update_status', {
+                status: 'busy',
+                detail: 'Update already in progress'
+            });
+            return;
+        }
+
+        updateInProgress = true;
+        socket.emit('update_status', {
+            status: 'downloading',
+            version: data.version,
+            detail: 'Starting system update...'
+        });
+
+        exec('/home/signage/ODS/scripts/ods-system-update.sh',
+            { timeout: 300000 },  // 5 min timeout
+            (err, stdout, stderr) => {
+                updateInProgress = false;
+                const version = data.version || null;
+                if (err) {
+                    console.error('[CloudSync] System update failed:', stderr || err.message);
+                    socket.emit('update_status', {
+                        version,
+                        status: 'failed',
+                        detail: (stderr || err.message).slice(-500)
+                    });
+                } else {
+                    // Read new version from file after update
+                    let newVersion = version;
+                    try {
+                        newVersion = fs.readFileSync('/home/signage/ODS/VERSION', 'utf8').trim();
+                    } catch { /* use provided version */ }
+                    console.log(`[CloudSync] ✅ System update complete: v${newVersion}`);
+                    socket.emit('update_status', {
+                        version: newVersion,
+                        status: 'complete',
+                        detail: stdout.slice(-500)
+                    });
+                }
+            }
+        );
+    });
+
     // --- Heartbeat ---
 
     heartbeatTimer = setInterval(async () => {
@@ -338,6 +389,7 @@ function getStatus() {
         playerId,
         lastSyncTime,
         syncInProgress,
+        updateInProgress,
         cachedAssets: offline.assetCount,
         canPlayOffline: offline.canOperate
     };
